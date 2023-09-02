@@ -1,3 +1,4 @@
+using Dai_Lete.Models;
 using Dai_Lete.ScheduledTasks;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
@@ -57,5 +58,7 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
+
+FeedCache.buildCache();
 
 app.Run();

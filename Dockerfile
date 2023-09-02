@@ -3,8 +3,8 @@ WORKDIR /app
 EXPOSE 80
 EXPOSE 443
 RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg
-ENV baseAddress=pod.locksley.dev
-ENV accessToken=12345
+ARG baseAddress=127.0.0.1
+ARG accessToken=12345
 
 
 

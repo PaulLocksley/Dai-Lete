@@ -21,7 +21,7 @@ public class Podcast
 
     }
 
-    public Podcast(Guid id)
+    /*public Podcast(Guid id)
     {
         var sql = @"Select * From Podcasts WHERE id = $id";
         var PossiblePodcast = SqLite.Connection().Query<Podcast>(sql).First();
@@ -33,7 +33,7 @@ public class Podcast
         Id = id;
         InUri = PossiblePodcast.InUri;
         OutUri = PossiblePodcast.OutUri;
-    }
+    }*/
 
     public Podcast(String id, String inUri, String outUri )
     {

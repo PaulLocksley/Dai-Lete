@@ -40,78 +40,12 @@ public class PodcastController : Controller
     [Produces("application/xml")]
     public ContentResult getFeed(Guid id)
     {
-        var RssFeed = new XmlDocument();
-        var sql = @"SELECT * FROM Podcasts where id = @id";
-        Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new {id});
-
-        sql = @"SELECT Id,FileSize FROM Episodes where PodcastId = @pid";
-        var episodes = SqLite.Connection().Query(sql, new { pid = id }).ToDictionary(
-                row=> (string)row.Id, 
-                row => (int)row.FileSize
-                );
-        if (podcast is null)
+        if (!FeedCache.feedCache.ContainsKey(id))
         {
-            throw new FileNotFoundException($"Failed to locate podcast with id {id}");
+            throw new Exception($"Failed to find podcast with key: {id}");
         }
-
-        try
-        {
-            using (var reader = XmlReader.Create(podcast.InUri.ToString()))
-            {
-                RssFeed.Load(reader);
-            }
-        }
-        catch
-        {
-            throw new Exception($"Failed to parse {podcast.InUri}");
-        }
-        Console.WriteLine();
-        Console.WriteLine("Break");
-        foreach (XmlElement node in RssFeed.DocumentElement.ChildNodes)
-        {
-            foreach (XmlElement n2 in node.ChildNodes)
-            {
-                if (n2.Name != "item")
-                {
-                    continue;
-                }
-
-                XmlNode? guid = null;
-                XmlNode? enclosure = null;
-                foreach (XmlElement n3 in n2.ChildNodes)
-                {
-                    if (n3.Name == "guid") { guid = n3;}
-                    if (n3.Name == "enclosure") { enclosure = n3;}
-                }
-
-                if(episodes.ContainsKey(guid.InnerText))
-                {
-                    foreach (XmlAttribute atr in enclosure.Attributes)
-                    {
-                        switch (atr.Name)
-                        {
-                            case "url":
-                                atr.Value = $"https://{HttpContext.Request.Host}/Podcasts/{id}/{guid.InnerText}.mp3";
-                                break;
-                            case "length":
-                                atr.Value = "2312";
-                                break;
-                            case "type":
-                                atr.Value = "audio/mpeg";
-                                break;
-                        }
-                    }
-                }
-                //Console.WriteLine(n2.Name);
-            }
-        }
-        return Content(RssFeed.OuterXml, "application/xml");
-        //
-        //return sb.ToString();
+        return Content(FeedCache.feedCache[id].OuterXml, "application/xml");
+        //return Content(XmlService.GenerateNewFeed(id).OuterXml, "application/xml");
     }
-
-    /*public string Add(string inUri)
-    {
-        return inUri;
-    }*/
+    
 }

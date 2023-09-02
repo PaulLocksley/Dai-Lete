@@ -38,7 +38,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             var sql = "Select Id FROM Episodes WHERE Id = @eid";
             var latest = PodcastServices.GetLatestEpsiode(podcast.Id);
             var episodeList = SqLite.Connection().Query<string>(sql, new {eid = latest.guid });
-
+            
             if (episodeList.Any())
             {
                 Console.WriteLine($"No new episodes of {podcast.InUri}");
@@ -46,12 +46,13 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             }
             
             PodcastServices.downloadEpsisode(podcast, latest.downloadLink);
-            //while (!t.IsCompleted){ Thread.Sleep(10);}
+            
             var filesize = PodcastServices.processLatest(podcast.Id,latest.guid);
             sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
             SqLite.Connection().Execute(sql, new { id = latest.guid, pid = podcast.Id, fs = filesize });
             Console.WriteLine("Outerdone.");
-            
+            //schedule a new copy of the item.
+            FeedCache.updateCache(podcast.Id);
         }
         _logger.LogInformation(
             "Timed Hosted Service is working. Count: {Count}", count);

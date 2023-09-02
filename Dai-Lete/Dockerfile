@@ -5,7 +5,7 @@ EXPOSE 443
 RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg
 ENV baseAddress=pod.locksley.dev
 ENV accessToken=12345
-
+ENV proxyAddress=prx.locksley.dev
 
 
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build

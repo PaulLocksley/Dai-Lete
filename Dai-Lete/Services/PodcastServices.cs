@@ -3,6 +3,7 @@ using System.Net;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
+using Dai_Lete.Services;
 using Dapper;
 
 namespace Dai_Lete.ScheduledTasks;
@@ -72,7 +73,7 @@ public static class PodcastServices
         //setup clients.
         var remoteHttmpClientHandler = new HttpClientHandler
         {
-            Proxy = new WebProxy("socks5://192.168.20.56:1080") //todo: ad env config
+            Proxy = new WebProxy($"socks5://{ConfigManager.getProxyAddress()}")
         };
         var remoteHttpClient = new HttpClient(remoteHttmpClientHandler);
         var localHttpClient = new HttpClient();

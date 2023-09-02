@@ -14,4 +14,12 @@ public static class ConfigManager
         var accessToken = Environment.GetEnvironmentVariable("accessToken");
         return accessToken ?? "1234";
     }
+
+    public static string getProxyAddress()
+    {
+        var proxyAddress = Environment.GetEnvironmentVariable("proxyAddress");
+        return proxyAddress ?? "192.168.20.56:1080";
+
+        
+    }
 }

@@ -1,4 +1,5 @@
 using System.Data;
+using System.Security.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using System.ServiceModel.Syndication;
 using System.Text;
@@ -6,6 +7,7 @@ using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.ScheduledTasks;
+using Dai_Lete.Services;
 using Dapper;
 
 namespace Dai_Lete.Controllers;
@@ -14,8 +16,13 @@ namespace Dai_Lete.Controllers;
 public class PodcastController : Controller
 {
     [HttpPost("add")]
-    public Guid addPodcast(Uri inUri)
+    public Guid addPodcast(Uri inUri, string authToken)
     {
+        if (ConfigManager.getAuthToken() != authToken )
+        {
+            throw new AuthenticationException("Not authorised");
+        }
+        
         var p = new Podcast(inUri);
         var sql = @"INSERT INTO Podcasts (inuri,outuri,id)  VALUES (@InUri,@OutUri,@Id)";
         Console.WriteLine($"obj: {p.InUri.ToString()} , {p.OutUri},{p.Id}");

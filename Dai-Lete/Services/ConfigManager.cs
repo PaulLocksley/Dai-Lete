@@ -8,4 +8,10 @@ public static class ConfigManager
         var env = Environment.GetEnvironmentVariable("baseAddress");
         return env ?? "127.0.0.1";
     }
+
+    public static string getAuthToken()
+    {
+        var accessToken = Environment.GetEnvironmentVariable("accessToken");
+        return accessToken ?? "1234";
+    }
 }

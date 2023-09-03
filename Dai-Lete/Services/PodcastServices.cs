@@ -79,7 +79,7 @@ public static class PodcastServices
         var localHttpClient = new HttpClient();
         
         //make folders.
-        var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
+        var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
         var destinationLocal = ($"{workingDirecory}{podcast.Id}.local");
@@ -133,7 +133,8 @@ public static class PodcastServices
         process.StartInfo.Arguments = ffmpegArgsR;
         process.Start();
         while (!process.HasExited) { Thread.Sleep(100); }
-        byte[] workingL = File.ReadAllBytes(workingLocal);
+        process.Kill();
+        byte[] workingL = File.ReadAllBytes(workingLocal); //todo: change to reading from disk
         byte[] workingR = File.ReadAllBytes(workingRemote);
         
         var oneP = 1024;//read all meta data and file headers. 
@@ -155,7 +156,7 @@ public static class PodcastServices
                 continue;
             }
 
-            for (int i = twoP + 1; i + byteWindow < workingR.Length && i < twoP + byteWindow * 30; i++)
+            for (int i = twoP + 1; i + byteWindow < workingR.Length; i++)//todo: time based processing window.
             {
                 subArray2 = new ArraySegment<Byte>(workingR, i, byteWindow);
                 if (subArray1.SequenceEqual(subArray2))

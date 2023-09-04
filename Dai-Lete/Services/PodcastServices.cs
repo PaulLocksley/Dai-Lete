@@ -145,7 +145,7 @@ public static class PodcastServices
         var workingR = File.OpenRead(workingRemote);
         var workingLLength = new FileInfo(workingLocal).Length;
         var workingRLength = new FileInfo(workingRemote).Length;
-
+        var outStream = File.Create(processedFile);
 
         var oneP = 1024; //read all meta data and file headers. 
         var twoP = 1024;
@@ -154,8 +154,7 @@ public static class PodcastServices
 
         var headers = new byte[1024];
         workingL.Read(headers, 0, 1024);
-        var outBytes = new List<Byte>();
-        outBytes.AddRange(headers);
+        outStream.Write(headers);
 
         while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
         {
@@ -166,7 +165,7 @@ public static class PodcastServices
             workingR.Read(bufferR, 0, byteWindow);
             if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
             {
-                outBytes.AddRange(bufferL);
+                outStream.Write(bufferL);
                 continue;
             }
 
@@ -176,16 +175,14 @@ public static class PodcastServices
                 workingR.Read(bufferR, 0, byteWindow);
                 if (bufferL.SequenceEqual(bufferR))
                 {
-                    outBytes.AddRange(bufferL);
+                    outStream.Write(bufferL);
                     break;
                 }
             }
 
             workingR.Seek(initialR, SeekOrigin.Begin);
         }
-
-        Console.WriteLine(outBytes.Count);
-        File.WriteAllBytes(processedFile, outBytes.ToArray());
+        outStream.Close();
         //one more process :) 
         
         process.StartInfo.Arguments = ffmpegArgsFinal;

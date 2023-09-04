@@ -128,49 +128,62 @@ public static class PodcastServices
         process.StartInfo.Arguments = ffmpegArgsL;
         process.EnableRaisingEvents = false;
         process.Start();
-        while (!process.HasExited) { Thread.Sleep(100); }
-        
+        while (!process.HasExited)
+        {
+            Thread.Sleep(100);
+        }
+
         process.StartInfo.Arguments = ffmpegArgsR;
         process.Start();
-        while (!process.HasExited) { Thread.Sleep(100); }
+        while (!process.HasExited)
+        {
+            Thread.Sleep(100);
+        }
+
         process.Kill();
-        byte[] workingL = File.ReadAllBytes(workingLocal); //todo: change to reading from disk
-        byte[] workingR = File.ReadAllBytes(workingRemote);
-        
-        var oneP = 1024;//read all meta data and file headers. 
+        var workingL = File.OpenRead(workingLocal); //todo: change to reading from disk
+        var workingR = File.OpenRead(workingRemote);
+        var workingLLength = new FileInfo(workingLocal).Length;
+        var workingRLength = new FileInfo(workingRemote).Length;
+
+
+        var oneP = 1024; //read all meta data and file headers. 
         var twoP = 1024;
-//var zero = new List<Byte> { 0 };
+        workingR.Seek(1024, SeekOrigin.Begin);
         var byteWindow = 120000;
-        var headers = new ArraySegment<Byte>(workingL, 0, 1024).ToList();
+
+        var headers = new byte[1024];
+        workingL.Read(headers, 0, 1024);
         var outBytes = new List<Byte>();
         outBytes.AddRange(headers);
-        while (oneP + byteWindow < workingL.Length && twoP + byteWindow < workingR.Length)
+
+        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
         {
-            var subArray1 = new ArraySegment<Byte>(workingL, oneP, byteWindow);
-            var subArray2 = new ArraySegment<Byte>(workingR, twoP, byteWindow);
-            if (Enumerable.SequenceEqual(subArray1, subArray2) || subArray1.All(x => x == 0))
+            var bufferL = new byte[byteWindow];
+            var bufferR = new byte[byteWindow];
+            var initialR = workingR.Position;
+            workingL.Read(bufferL, 0, byteWindow);
+            workingR.Read(bufferR, 0, byteWindow);
+            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
             {
-                outBytes.AddRange(subArray1);
-                oneP += byteWindow;
-                twoP += byteWindow;
+                outBytes.AddRange(bufferL);
                 continue;
             }
 
-            for (int i = twoP + 1; i + byteWindow < workingR.Length; i++)//todo: time based processing window.
+            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
             {
-                subArray2 = new ArraySegment<Byte>(workingR, i, byteWindow);
-                if (subArray1.SequenceEqual(subArray2))
+                workingR.Seek(i, SeekOrigin.Begin);
+                workingR.Read(bufferR, 0, byteWindow);
+                if (bufferL.SequenceEqual(bufferR))
                 {
-                    Console.WriteLine("Found SlidingWindow Match");
-                    outBytes.AddRange(subArray1);
-                    twoP = i + byteWindow;
+                    outBytes.AddRange(bufferL);
                     break;
                 }
             }
-    
-            //if we never find continue.
-            oneP += byteWindow;
+
+            workingR.Seek(initialR, SeekOrigin.Begin);
         }
+
         Console.WriteLine(outBytes.Count);
         File.WriteAllBytes(processedFile, outBytes.ToArray());
         //one more process :) 

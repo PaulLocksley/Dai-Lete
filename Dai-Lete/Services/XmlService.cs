@@ -1,3 +1,4 @@
+using System.Net;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
@@ -10,10 +11,17 @@ public class XmlService
 {
     public static XmlDocument GenerateNewFeed(Guid podcastId)
     {
+        //Generate a new XML feed for the podcast, generating the feed will also refresh the metadata cache for this pod
         var RssFeed = new XmlDocument();
+        
+        string metaDataName = String.Empty;
+        Uri? metaDataImageUrl = null;
+        string metaDataAuthor = String.Empty;
+        string metaDataDescription = String.Empty;
+        
         var sql = @"SELECT * FROM Podcasts where id = @podcastId";
         Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new { podcastId = podcastId});
-
+        
         sql = @"SELECT Id,FileSize FROM Episodes where PodcastId = @pid";
         var episodes = SqLite.Connection().Query(sql, new { pid = podcastId }).ToDictionary(
                 row=> (string)row.Id, 
@@ -40,6 +48,23 @@ public class XmlService
             {
                 if (n2.Name != "item")
                 {
+                    //build metadata.
+                    var items = new string[] {"title","itunes:author","description"};//,"itunes:image"};
+                    switch (n2.Name)
+                    {
+                        case "title":
+                            metaDataName = n2.InnerText;
+                            break;
+                        case "description":
+                            metaDataDescription = n2.InnerText;
+                            break;
+                        case "itunes:author":
+                            metaDataAuthor = n2.InnerText;
+                            break;
+                        case "itunes:image":
+                            metaDataImageUrl = new Uri(n2.Attributes.GetNamedItem("href").InnerText);
+                            break;
+                    }
                     continue;
                 }
 
@@ -71,6 +96,11 @@ public class XmlService
                 }
             }
         }
+        
+        //metadata area.
+        FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
+                                                                metaDataImageUrl, metaDataDescription));
+        
         return RssFeed;
     }
 }

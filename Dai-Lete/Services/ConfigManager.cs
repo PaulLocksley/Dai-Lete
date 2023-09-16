@@ -19,7 +19,5 @@ public static class ConfigManager
     {
         var proxyAddress = Environment.GetEnvironmentVariable("proxyAddress");
         return proxyAddress ?? "192.168.20.56:1080";
-
-        
     }
 }

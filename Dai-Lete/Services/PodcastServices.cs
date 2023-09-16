@@ -68,7 +68,7 @@ public static class PodcastServices
         throw new FileNotFoundException($"Could not find episode for podcast: {podcastId}");
     }
 
-    public static void downloadEpsisode(Podcast podcast, string episodeUrl)
+    public static void downloadEpsisode(Podcast podcast, string episodeUrl,string episodeGuid)
     {
         //setup clients.
         var remoteHttmpClientHandler = new HttpClientHandler
@@ -82,8 +82,8 @@ public static class PodcastServices
         var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
-        var destinationLocal = ($"{workingDirecory}{podcast.Id}.local");
-        var destinationRemote = ($"{workingDirecory}{podcast.Id}.remote");
+        var destinationLocal = ($"{workingDirecory}{podcast.Id}{episodeGuid}.local");
+        var destinationRemote = ($"{workingDirecory}{podcast.Id}{episodeGuid}.remote");
 
         var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
         {
@@ -108,11 +108,11 @@ public static class PodcastServices
     public static int processLatest(Guid id, string episodeId)
     {
         var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
-        var preLocal = ($"{workingDirecory}{id}.local");
+        var preLocal = ($"{workingDirecory}{id}{episodeId}.local");
         var workingLocal = $"{preLocal}.wav";
-        var preRemote = ($"{workingDirecory}{id}.remote");
+        var preRemote = ($"{workingDirecory}{id}{episodeId}.remote");
         var workingRemote = $"{preLocal}.wav";
-        var processedFile = $"{workingDirecory}{id}processed.wav";
+        var processedFile = $"{workingDirecory}{id}{episodeId}processed.wav";
         var finalFolder = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{id}";
         var finalFile = $"{finalFolder}{Path.DirectorySeparatorChar}{episodeId}.mp3";
         if (!Directory.Exists(finalFolder))
@@ -141,19 +141,19 @@ public static class PodcastServices
         }
 
         process.Kill();
-        var workingL = File.OpenRead(workingLocal); //todo: change to reading from disk
+        var workingL = File.OpenRead(workingLocal);
         var workingR = File.OpenRead(workingRemote);
         var workingLLength = new FileInfo(workingLocal).Length;
         var workingRLength = new FileInfo(workingRemote).Length;
         var outStream = File.Create(processedFile);
 
-        var oneP = 1024; //read all meta data and file headers. 
-        var twoP = 1024;
-        workingR.Seek(1024, SeekOrigin.Begin);
+        var oneP = 1024; //read hopefully all meta data and file headers. 
+        var twoP = oneP;
+        workingR.Seek(oneP, SeekOrigin.Begin);
         var byteWindow = 120000;
 
-        var headers = new byte[1024];
-        workingL.Read(headers, 0, 1024);
+        var headers = new byte[oneP];
+        workingL.Read(headers, 0, oneP);
         outStream.Write(headers);
 
         while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
@@ -183,12 +183,21 @@ public static class PodcastServices
             workingR.Seek(initialR, SeekOrigin.Begin);
         }
         outStream.Close();
+        workingL.Close();
+        workingR.Close();
         //one more process :) 
         
         process.StartInfo.Arguments = ffmpegArgsFinal;
         process.Start();
         while (!process.HasExited) { Thread.Sleep(100); }
-    
+        process.Kill();
+        
+        File.Delete(preLocal);
+        File.Delete(workingLocal);
+        File.Delete(preRemote);
+        File.Delete(workingRemote);
+        File.Delete(processedFile);
+
         return (int)new FileInfo(finalFile).Length;
     }
     

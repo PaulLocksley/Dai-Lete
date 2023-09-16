@@ -10,6 +10,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     private int executionCount = 0;
     private readonly ILogger<ConvertNewEpisodes> _logger;
     private Timer? _timer = null;
+    private Timer? _QueueTimer = null;
 
     public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger)
     {
@@ -20,19 +21,32 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     {
         _logger.LogInformation("Timed Hosted Service running.");
 
-        _timer = new Timer(DoWork, null, TimeSpan.Zero,
+        _timer = new Timer(CheckFeeds, null, TimeSpan.Zero,
             TimeSpan.FromHours(1));
-
+        _QueueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, TimeSpan.FromMinutes(5)); 
         return Task.CompletedTask;
     }
 
-    private void DoWork(object? state)
+    private void CheckQueue(Object? state)
     {
-        var count = Interlocked.Increment(ref executionCount);
-        
-        
+        _logger.LogInformation("Checking Queue for processeing episodes.");
+        int processedEps = 0;
+        while (!PodcastQueue.toProcessQueue.IsEmpty)
+        {
+            (Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
+            var deQueueResult = PodcastQueue.toProcessQueue.TryDequeue(out episodeInfo);
+            if (deQueueResult = false)
+            {
+                return;
+            }
+            processEpisode(episodeInfo.podcast,episodeInfo.episodeUrl,episodeInfo.episodeGuid);
+            processedEps++;
+        }
+        _logger.LogInformation($"Queue processed {processedEps} episodes");
+    }
+    private void CheckFeeds(object? state)
+    {
         var plist = PodcastServices.GetPodcasts();
-        
         foreach (var podcast in plist)
         {
             var sql = "Select Id FROM Episodes WHERE Id = @eid";
@@ -41,22 +55,27 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             
             if (episodeList.Any())
             {
-                Console.WriteLine($"No new episodes of {podcast.InUri}");
+                _logger.LogInformation($"No new episodes of {podcast.InUri}");
                 continue;
             }
-            
-            PodcastServices.downloadEpsisode(podcast, latest.downloadLink);
-            
-            var filesize = PodcastServices.processLatest(podcast.Id,latest.guid);
-            sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
-            SqLite.Connection().Execute(sql, new { id = latest.guid, pid = podcast.Id, fs = filesize });
-            Console.WriteLine("Outerdone.");
-            //schedule a new copy of the item.
-            FeedCache.updateCache(podcast.Id);
+            _logger.LogInformation($"New episodes of {podcast.InUri}");
+            processEpisode(podcast,latest.downloadLink,latest.guid);
         }
-        _logger.LogInformation(
-            "Timed Hosted Service is working. Count: {Count}", count);
     }
+
+    private void processEpisode(Podcast podcast, string DownloadLink, string episodeGuid)
+    {
+        _logger.LogInformation($"Starting to process episode: {DownloadLink}");
+        PodcastServices.downloadEpsisode(podcast, DownloadLink,episodeGuid);
+        var filesize = PodcastServices.processLatest(podcast.Id,episodeGuid);
+        var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
+        SqLite.Connection().Execute(sql, new { id = episodeGuid, pid = podcast.Id, fs = filesize });
+        //schedule a new copy of the item.
+        FeedCache.updateCache(podcast.Id);
+        _logger.LogInformation($"Completed processing episode: {DownloadLink}");
+
+    }
+    
 
     public Task StopAsync(CancellationToken stoppingToken)
     {

@@ -1,0 +1,32 @@
+@page
+@using Dai_Lete.Services
+@model Dai_Lete.Pages.PodcastView
+
+@{
+    Layout = null;
+}
+
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title></title>
+</head>
+@{
+    Console.WriteLine("1"+Model.podcastID);
+}
+
+<body>
+<p>This is a podcast view</p>
+a
+@Model.podcastID
+@if (@Model.podcastID is null)
+{
+    <h1>Error Parsing id value</h1>
+}
+}
+<div>
+@Model.podcastID
+</div>
+</body>
+</html>

@@ -39,6 +39,15 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             {
                 return;
             }
+
+            var sql = "Select Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
+            var isPresentList = SqLite.Connection().Query<string>(sql,
+                new { pid = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
+            if (isPresentList.Any())
+            {
+                _logger.LogInformation($"Episode {episodeInfo.episodeGuid} found in database, skipping");
+                continue;
+            }
             processEpisode(episodeInfo.podcast,episodeInfo.episodeUrl,episodeInfo.episodeGuid);
             processedEps++;
         }
@@ -49,9 +58,9 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         var plist = PodcastServices.GetPodcasts();
         foreach (var podcast in plist)
         {
-            var sql = "Select Id FROM Episodes WHERE Id = @eid";
+            var sql = "Select Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
             var latest = PodcastServices.GetLatestEpsiode(podcast.Id);
-            var episodeList = SqLite.Connection().Query<string>(sql, new {eid = latest.guid });
+            var episodeList = SqLite.Connection().Query<string>(sql, new {eid = latest.guid,pid = podcast.Id });
             
             if (episodeList.Any())
             {

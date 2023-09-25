@@ -11,6 +11,11 @@ public class PodcastView : PageModel
     
     public void OnGet()
     {
-        
+
+    }
+
+    public void Test(string pid)
+    {
+        Console.WriteLine(pid);
     }
 }

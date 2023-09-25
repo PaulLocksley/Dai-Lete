@@ -7,25 +7,20 @@ namespace Dai_Lete.Models;
 public class Podcast
 {
     public Uri InUri;
-    public string OutUri;
     public Guid Id;
     
     public Podcast(Uri inUri)
     {
         InUri = inUri;
         Id = Guid.NewGuid();
-        OutUri = $"/{Id}/";
 
     }
-    
 
-    public Podcast(String id, String inUri, String outUri )
+    public Podcast(string id, string inUri)
     {
         InUri = new Uri(inUri);
-        OutUri = outUri;
-        Id = Guid.Parse(id);
+        Id = new Guid(id);
     }
-
     public Dictionary<Uri,Uri> GetEpisodes()
     {
         var EpisodesDict = new Dictionary<Uri, Uri>();
@@ -37,6 +32,6 @@ public class Podcast
 
     public override string ToString()
     {
-        return $"{Id.ToString()}, {InUri}, {OutUri}";
+        return $"{Id.ToString()}, {InUri}";
     }
 }

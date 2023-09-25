@@ -1,32 +1,96 @@
 @page
 @using Dai_Lete.Services
+@using Dai_Lete.Repositories
+@using Dai_Lete.Models
 @model Dai_Lete.Pages.PodcastView
 
-@{
-    Layout = null;
-}
 
-<!DOCTYPE html>
-
-<html>
-<head>
-    <title></title>
-</head>
 @{
+    PodcastMetadata podcastMetadata = new PodcastMetadata();
+    if (Model.podcastID is not null)
+    {
+        podcastMetadata = FeedCache.metaDataCache[Model.podcastID.Value];
+    }
     Console.WriteLine("1"+Model.podcastID);
 }
 
+<head>
+    <title>@podcastMetadata.title</title>
+</head>
+
+
 <body>
-<p>This is a podcast view</p>
-a
-@Model.podcastID
-@if (@Model.podcastID is null)
-{
-    <h1>Error Parsing id value</h1>
-}
-}
-<div>
-@Model.podcastID
+<div class="container-fluid">
+    @if (@Model.podcastID is null)
+    {
+        <h1>Error Parsing id value</h1>
+    }
+    else
+    {
+        <div>
+            <h1>@podcastMetadata.title</h1>
+            <p>@podcastMetadata.publisher</p>
+            <p>@podcastMetadata.description</p>
+        </div>
+        <hr/>
+        <h3>
+            Dai-Leted Episodes:
+        </h3>
+        <table id="processedEpisodes" class ="display">
+            <thead>
+            <tr>
+                <th>Episode Name</th>
+                <th>Air Date</th>
+                <th>Actions</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var p in @podcastMetadata.processedEpisodes)
+            {
+                <tr>
+                    <td>@p.episodeName</td>
+
+                    <td>@p.pubDate</td>
+
+                    <td><button hx-post="/Podcast/s" hx-include="[name='@p.episodeId',
+                                                                            name='@p.downloadLink',
+                                                                            name='@p.Podcast.Id,
+                                                                            name='@p.Podcast.InUri']">
+                            
+                        Delete Button 
+                    </button></td>
+
+                </tr>
+            }
+            </tbody>
+        </table>
+        <hr/>
+        <h3>
+            Non-Dai-Leted Episodes:
+        </h3>
+        @foreach (var p in @podcastMetadata.nonProcessedEpisodes)
+        {
+            <div class="row">
+                <div class="col-md-10">
+                    <p>
+                        @p.episodeName
+                    </p>
+                </div>
+                <div class="col-md-2 align-items-end">
+                    @* Todo: change from query to body params, seems to be more complex than it should be.
+                    <form hx-post="/Podcast/Queue">
+                        <input type="hidden" name="episodeGuid" value="@p.episodeId"/>
+                        <input type="hidden" name="episodeUrl" value="@p.downloadLink"/>
+                        <input type="hidden" name="podcastGUID" value="'@p.Podcast.Id"/>
+                        <input type="hidden" name="podcastInUri" value="@p.Podcast.InUri"/>
+                        <button type="submit">Process Episode</button>
+                    </form>
+                    *@
+                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId
+">Process2</button>
+                </div>
+            </div>
+        }
+    }
 </div>
 </body>
-</html>

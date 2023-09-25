@@ -33,8 +33,8 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         int processedEps = 0;
         while (!PodcastQueue.toProcessQueue.IsEmpty)
         {
-            (Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
-            var deQueueResult = PodcastQueue.toProcessQueue.TryDequeue(out episodeInfo);
+            //(Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
+            var deQueueResult = PodcastQueue.toProcessQueue.TryDequeue(out var episodeInfo);
             if (deQueueResult = false)
             {
                 return;
@@ -42,7 +42,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
 
             var sql = "Select Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
             var isPresentList = SqLite.Connection().Query<string>(sql,
-                new { pid = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
+                new { pId = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
             if (isPresentList.Any())
             {
                 _logger.LogInformation($"Episode {episodeInfo.episodeGuid} found in database, skipping");

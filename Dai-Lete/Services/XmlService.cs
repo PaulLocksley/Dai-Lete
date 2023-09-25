@@ -16,8 +16,11 @@ public class XmlService
         
         string metaDataName = String.Empty;
         Uri? metaDataImageUrl = null;
+        Uri? episodeDownloadUrl = null;
         string metaDataAuthor = String.Empty;
         string metaDataDescription = String.Empty;
+        IList<PodcastEpisodeMetadata> processedEpisodes = new List<PodcastEpisodeMetadata>();
+        IList<PodcastEpisodeMetadata> nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
         
         var sql = @"SELECT * FROM Podcasts where id = @podcastId";
         Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new { podcastId = podcastId});
@@ -49,7 +52,6 @@ public class XmlService
                 if (n2.Name != "item")
                 {
                     //build metadata.
-                    var items = new string[] {"title","itunes:author","description"};//,"itunes:image"};
                     switch (n2.Name)
                     {
                         case "title":
@@ -78,6 +80,7 @@ public class XmlService
 
                 if(episodes.ContainsKey(guid.InnerText))
                 {
+                    processedEpisodes.Add(GetEpisodeMetaData(n2,podcast));
                     foreach (XmlAttribute atr in enclosure.Attributes)
                     {
                         switch (atr.Name)
@@ -94,13 +97,56 @@ public class XmlService
                         }
                     }
                 }
+                else
+                {
+                    nonProcessedEpisodes.Add(GetEpisodeMetaData(n2,podcast));
+                }
             }
         }
         
         //metadata area.
         FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
-                                                                metaDataImageUrl, metaDataDescription));
+                                                                metaDataImageUrl, metaDataDescription,
+                                                                processedEpisodes,nonProcessedEpisodes));
         
         return RssFeed;
+    }
+
+
+    private static PodcastEpisodeMetadata GetEpisodeMetaData(XmlElement podcastEpisode, Podcast podcast)
+    {
+        var pm = new PodcastEpisodeMetadata(podcast);
+        foreach (XmlElement node in podcastEpisode.ChildNodes)
+        {
+            switch (node.Name)
+            {
+                case "title":
+                    pm.episodeName = node.InnerText;
+                    break;
+                case "description":
+                    pm.description = node.InnerText;
+                    break;
+                case "guid":
+                    pm.episodeId = node.InnerText;
+                    break;
+                case "pubDate":
+                    pm.pubDate = DateTime.Parse(node.InnerText);
+                    break;
+                case "itunes:image":
+                    //todo fix uri parsing elsewhere.
+                    if(Uri.TryCreate(node.Attributes.GetNamedItem("href")?.InnerText, UriKind.Absolute, out var outUri))
+                    {
+                        pm.imageLink = outUri;
+                    }
+                    break;
+                case "enclosure":
+                    if(Uri.TryCreate(node.Attributes.GetNamedItem("url")?.InnerText, UriKind.Absolute, out var outUri2))
+                    {
+                        pm.downloadLink = outUri2;
+                    }
+                    break;
+            }
+        }
+        return pm;
     }
 }

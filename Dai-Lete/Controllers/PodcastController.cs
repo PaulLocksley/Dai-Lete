@@ -1,4 +1,5 @@
 using System.Data;
+using System.Net;
 using System.Security.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using System.ServiceModel.Syndication;
@@ -24,15 +25,27 @@ public class PodcastController : Controller
         }
         
         var p = new Podcast(inUri);
-        var sql = @"INSERT INTO Podcasts (inuri,outuri,id)  VALUES (@InUri,@OutUri,@Id)";
-        Console.WriteLine($"obj: {p.InUri.ToString()} , {p.OutUri},{p.Id}");
-        var rows = SqLite.Connection().Execute(sql, new {InUri = p.InUri.ToString(), OutUri = p.OutUri, Id = p.Id});
+        var sql = @"INSERT INTO Podcasts (inuri,id)  VALUES (@InUri,@Id)";
+        Console.WriteLine($"obj: {p.InUri.ToString()} ,{p.Id}");
+        var rows = SqLite.Connection().Execute(sql, new {InUri = p.InUri.ToString(), Id = p.Id});
         if (rows != 1)
         {
             throw new DataException();
         }
 
         return p.Id;
+    }
+
+    [HttpPost("Queue")]
+    public string queueEpisode(string podcastInUri, string podcastGUID, string episodeUrl, string episodeGuid)
+    {
+        //todo: changed 
+        if (Guid.TryParse(podcastGUID, out var  parsedPodcastGuid) && !FeedCache.feedCache.ContainsKey(parsedPodcastGuid))
+        {
+            throw new Exception("Error, could not parse podcast Guid or podcast not known to server.");
+        }
+        PodcastQueue.toProcessQueue.Enqueue((Podcast:new Podcast(podcastGUID,podcastInUri),episodeUrl: episodeUrl,episodeGuid: episodeGuid));
+        return $"Episode added to queue. {PodcastQueue.toProcessQueue.Count} item/s in queue ";
     }
     
     [HttpGet("list-podcasts")]

@@ -51,14 +51,12 @@
                     <td>@p.episodeName</td>
 
                     <td>@p.pubDate</td>
+                <td>
+                    <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId">
+                        Delete Episode
+                    </button>
 
-                    <td><button hx-post="/Podcast/s" hx-include="[name='@p.episodeId',
-                                                                            name='@p.downloadLink',
-                                                                            name='@p.Podcast.Id,
-                                                                            name='@p.Podcast.InUri']">
-                            
-                        Delete Button 
-                    </button></td>
+                    </td>
 
                 </tr>
             }
@@ -86,8 +84,7 @@
                         <button type="submit">Process Episode</button>
                     </form>
                     *@
-                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId
-">Process2</button>
+                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId">Process2</button>
                 </div>
             </div>
         }

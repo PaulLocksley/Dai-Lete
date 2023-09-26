@@ -8,7 +8,7 @@
 }
 <script>
 function copyRssFeed(ID) {
-     var url = "https://@ConfigManager.getBaseAddress()/PodcastView/podcast-feed?id="+ID;
+     var url = "https://@ConfigManager.getBaseAddress()/Podcast/podcast-feed?id="+ID;
      navigator.clipboard.writeText(""+url)
      alert("Podcast Feed: "+url+"\nCopied to Clipboard")
 }

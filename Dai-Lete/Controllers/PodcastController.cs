@@ -47,6 +47,30 @@ public class PodcastController : Controller
         PodcastQueue.toProcessQueue.Enqueue((Podcast:new Podcast(podcastGUID,podcastInUri),episodeUrl: episodeUrl,episodeGuid: episodeGuid));
         return $"Episode added to queue. {PodcastQueue.toProcessQueue.Count} item/s in queue ";
     }
+
+    [HttpDelete("DeleteEpisode")]
+    public bool DeletePodcastEpisode(Guid podcastId, string episodeGuid)
+    {
+        if(!FeedCache.feedCache.ContainsKey(podcastId))
+        {
+            throw new Exception("Error, podcast not known to server.");
+        }
+
+        var sql = @"DELETE FROM Episodes WHERE id==@eid and podcastid==@pid";
+        var i = SqLite.Connection().Execute(sql, new { pid = podcastId, eid = episodeGuid });
+        if (i != 1)
+        {
+            throw new Exception("Error, you dun messed up...");
+        }
+        var filepath = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{podcastId}{Path.DirectorySeparatorChar}{episodeGuid}.mp3";
+        if (!System.IO.File.Exists(filepath))
+        {
+            throw new Exception("Could not find actual file.");
+        }
+        System.IO.File.Delete(filepath);
+        Console.WriteLine($"Deleted episode {episodeGuid} of podcast {podcastId}");//todo:add logger to controller
+        return true;
+    }
     
     [HttpGet("list-podcasts")]
     [Produces("application/json", "application/xml")]

@@ -1,6 +1,7 @@
 using System.Data;
 using System.Net;
 using System.Security.Authentication;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using System.ServiceModel.Syndication;
 using System.Text;
@@ -19,15 +20,16 @@ public class PodcastController : Controller
     [HttpPost("add")]
     public Guid addPodcast(Uri inUri, string authToken)
     {
-        if (ConfigManager.getAuthToken() != authToken )
+        var enc = Encoding.UTF8;
+        if (SHA256.HashData(enc.GetBytes(inUri + ":" + ConfigManager.getAuthToken())).ToString() != authToken)
         {
             throw new AuthenticationException("Not authorised");
         }
-        
+
         var p = new Podcast(inUri);
         var sql = @"INSERT INTO Podcasts (inuri,id)  VALUES (@InUri,@Id)";
         Console.WriteLine($"obj: {p.InUri.ToString()} ,{p.Id}");
-        var rows = SqLite.Connection().Execute(sql, new {InUri = p.InUri.ToString(), Id = p.Id});
+        var rows = SqLite.Connection().Execute(sql, new { InUri = p.InUri.ToString(), Id = p.Id });
         if (rows != 1)
         {
             throw new DataException();

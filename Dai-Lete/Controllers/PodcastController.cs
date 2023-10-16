@@ -19,14 +19,17 @@ namespace Dai_Lete.Controllers;
 public class PodcastController : Controller
 {
     [HttpPost("add")]
-    public Guid addPodcast(Uri inUri, string authToken)
+    public IActionResult addPodcast(Uri inUri, string authToken)
     {
-        var enc = Encoding.UTF8;
-        if (SHA256.HashData(enc.GetBytes(inUri + ":" + ConfigManager.getAuthToken())).ToString() != authToken)
+        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(inUri + ":" + ConfigManager.getAuthToken()));
+        StringBuilder hashBuilder = new StringBuilder();
+        foreach (byte b in hashBytes) { hashBuilder.Append(b.ToString("x2")); }
+        //
+        if (hashBuilder.ToString() != authToken)
         {
-            throw new AuthenticationException("Not authorised");
+            Console.WriteLine($"{authToken} did not match expected value");
+            return StatusCode(401);
         }
-
         var p = new Podcast(inUri);
         var sql = @"INSERT INTO Podcasts (inuri,id)  VALUES (@InUri,@Id)";
         Console.WriteLine($"obj: {p.InUri.ToString()} ,{p.Id}");
@@ -35,8 +38,8 @@ public class PodcastController : Controller
         {
             throw new DataException();
         }
-
-        return p.Id;
+        // todo queue metadata
+        return StatusCode(200,p.Id);
     }
     [HttpDelete("delete")]
     public IActionResult deletePodcast(Guid id, string authToken)

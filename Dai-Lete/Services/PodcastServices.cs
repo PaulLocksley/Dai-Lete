@@ -14,7 +14,8 @@ public static class PodcastServices
     public static List<Podcast> GetPodcasts()
     {
         var sql = @"Select * From Podcasts";
-        return SqLite.Connection().Query<Podcast>(sql).ToList();
+        var results = SqLite.Connection().Query<Podcast>(sql);
+        return results.ToList();
     }
 
     public static (string guid, string downloadLink) GetLatestEpsiode(Guid podcastId)
@@ -105,7 +106,7 @@ public static class PodcastServices
         Console.WriteLine("Downloads apparently done.");
     }
 
-    public static int processLatest(Guid id, string episodeId)
+    public static int ProcessDownloadedEpisode(Guid id, string episodeId)
     {
         var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
         var preLocal = ($"{workingDirecory}{id}{episodeId}.local");

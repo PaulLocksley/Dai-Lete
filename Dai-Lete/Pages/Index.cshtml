@@ -18,16 +18,34 @@ async function  deleteEpsiode(ID) {
       return;
     } 
     const msgBuffer = new TextEncoder().encode(ID+":"+password);
-      const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      console.log(hashArray.length)
-      const hash = hashArray
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+
+    const hash = hashArray
         .map((item) => item.toString(16).padStart(2, "0"))
         .join("");
-    fetch(window.location.origin+"/Podcast/delete?id="+ID+"&authToken="+hash, { method: 'DELETE' })
-        //.then(() => ());
-
+    const resp = await fetch(window.location.origin+"/Podcast/delete?id="+ID+"&authToken="+hash, { method: 'DELETE' })
+    if(resp.status != 200){
+        alert("Failed to delete podcast! response code:" + resp.status)
+        return
+    }
+    document.getElementById("pod-card-"+ID).remove()
 }
+async function addPodcast(link,password){
+    const msgBuffer = new TextEncoder().encode(link+":"+password);
+    const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray
+            .map((item) => item.toString(16).padStart(2, "0"))
+            .join("");
+        const resp = await fetch(window.location.origin+"/Podcast/add?inUri="+link+"&authToken="+hash, { method: 'POST' })
+        if(resp.status != 200){
+            alert("Failed to add podcast! response code:" + resp.status)
+            return
+        }
+        alert("Podcast added, it may take up to 1 hour for podcast to populate")
+    }
+
 </script>
 <div class="text-center">
     <h1 class="display-4">Welcome</h1>
@@ -39,7 +57,8 @@ async function  deleteEpsiode(ID) {
 
     @foreach (var pod in FeedCache.metaDataCache)
     {
-        <div class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded-5;" 
+        <div id="pod-card-@pod.Key" 
+            class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded-5;" 
              style="width: 19%; min-width: 200px">
             <img class="align-content-center h-auto rounded-2"src="@pod.Value.imageUrl"/>
             

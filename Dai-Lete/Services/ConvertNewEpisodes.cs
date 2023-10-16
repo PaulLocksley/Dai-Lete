@@ -76,7 +76,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     {
         _logger.LogInformation($"Starting to process episode: {DownloadLink}");
         PodcastServices.downloadEpsisode(podcast, DownloadLink,episodeGuid);
-        var filesize = PodcastServices.processLatest(podcast.Id,episodeGuid);
+        var filesize = PodcastServices.ProcessDownloadedEpisode(podcast.Id,episodeGuid);
         var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
         SqLite.Connection().Execute(sql, new { id = episodeGuid, pid = podcast.Id, fs = filesize });
         //schedule a new copy of the item.

@@ -16,8 +16,7 @@ public class SqLite
             var tmpConnection = new SqliteConnection("Data Source=" + DbFile);
             var sql = @"CREATE TABLE IF NOT EXISTS Podcasts (
                     Id GUID PRIMARY KEY,
-                    InUri text,
-                    OutUri text
+                    InUri text
                 )";
             tmpConnection.Execute(sql);
             sql  = @"CREATE TABLE IF NOT EXISTS Episodes (

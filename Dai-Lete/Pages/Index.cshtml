@@ -31,7 +31,16 @@ async function  deleteEpsiode(ID) {
     }
     document.getElementById("pod-card-"+ID).remove()
 }
-async function addPodcast(link,password){
+async function addPodcast(){
+    var link = document.getElementById("inputUri").value
+    var password = document.getElementById("inputPassword").value
+    try {
+        url = new URL(link);
+    } catch (_) {
+        alert("Please enter a valid url");
+        return
+    }
+
     const msgBuffer = new TextEncoder().encode(link+":"+password);
     const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -40,19 +49,26 @@ async function addPodcast(link,password){
             .join("");
         const resp = await fetch(window.location.origin+"/Podcast/add?inUri="+link+"&authToken="+hash, { method: 'POST' })
         if(resp.status != 200){
-            alert("Failed to add podcast! response code:" + resp.status)
+            let body = await resp.text()
+            alert("Failed to add podcast! response code:" + resp.status + " " + body)
             return
         }
         alert("Podcast added, it may take up to 1 hour for podcast to populate")
+        document.getElementById("inputUri").value = ""
+        document.getElementById("inputPassword").value = ""
     }
 
 </script>
 <div class="text-center">
     <h1 class="display-4">Welcome</h1>
 </div>
-<div class="float-end">
-    <asp:Button ID="AddButton" runat="server" Text="Launch Modal Popup (Client)" />
+
+<div class="hstack">
+    <h3>Podcast URI: </h3><input type="text" id="inputUri" name="inputUri" >
+    <h3> Password: </h3><input type="text" id="inputPassword" name="inputPassword" >
+    <button onclick="addPodcast()">Add Podcast</button>
 </div>
+
 <div class="d-flex p-2 flex-wrap">
 
     @foreach (var pod in FeedCache.metaDataCache)

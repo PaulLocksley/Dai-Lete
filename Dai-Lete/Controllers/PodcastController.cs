@@ -31,6 +31,19 @@ public class PodcastController : Controller
             return StatusCode(401);
         }
         var p = new Podcast(inUri);
+        //validate we can read the url as a feed.
+        try
+        {
+            using var reader = XmlReader.Create(p.InUri.ToString());
+            var RssFeed = new XmlDocument();
+            RssFeed.Load(reader);
+        }
+        catch
+        {
+            return StatusCode(400, $"Failed to parse {p.InUri}");
+        }
+        
+        
         var sql = @"INSERT INTO Podcasts (inuri,id)  VALUES (@InUri,@Id)";
         Console.WriteLine($"obj: {p.InUri.ToString()} ,{p.Id}");
         var rows = SqLite.Connection().Execute(sql, new { InUri = p.InUri.ToString(), Id = p.Id });

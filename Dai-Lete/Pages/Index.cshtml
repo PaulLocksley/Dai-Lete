@@ -12,10 +12,28 @@ function copyRssFeed(ID) {
      navigator.clipboard.writeText(""+url)
      alert("Podcast Feed: "+url+"\nCopied to Clipboard")
 }
+async function  deleteEpsiode(ID) {
+    let password = prompt("Please enter password to delete podcast", "12345");
+    if (password == null || password == "") {
+      return;
+    } 
+    const msgBuffer = new TextEncoder().encode(ID+":"+password);
+      const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      console.log(hashArray.length)
+      const hash = hashArray
+        .map((item) => item.toString(16).padStart(2, "0"))
+        .join("");
+    fetch(window.location.origin+"/Podcast/delete?id="+ID+"&authToken="+hash, { method: 'DELETE' })
+        //.then(() => ());
 
+}
 </script>
 <div class="text-center">
     <h1 class="display-4">Welcome</h1>
+</div>
+<div class="float-end">
+    <asp:Button ID="AddButton" runat="server" Text="Launch Modal Popup (Client)" />
 </div>
 <div class="d-flex p-2 flex-wrap">
 
@@ -30,11 +48,16 @@ function copyRssFeed(ID) {
                     <h3>@pod.Value.title</h3>
                 </a>
                 <p class="card-subtitle">@pod.Value.publisher</p>
-                </div>
+            </div>
+            <div class="hstack">
                 <button  class="btn" onclick="copyRssFeed('@pod.Key')">
                     <img src="images/rss.svg" width="52"height="52" alt="Copy RSS Feed"/>
                 </button>
-@*
+                <button class="btn" onclick="deleteEpsiode('@pod.Key')">
+                    <img id="delete-@pod.Key"src="images/delete.svg" width="52"height="52" alt="Delete"/>
+                </button>
+            </div>
+@*              
         <p>@Html.Raw(@pod.Value.description)</p> <!--This is stupid but it looks pretty.-->
         *@
         </div>

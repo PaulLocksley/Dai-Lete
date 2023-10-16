@@ -1,5 +1,6 @@
 using System.Data;
 using System.Net;
+using System.Runtime.Intrinsics.Arm;
 using System.Security.Authentication;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
@@ -36,6 +37,35 @@ public class PodcastController : Controller
         }
 
         return p.Id;
+    }
+    [HttpDelete("delete")]
+    public IActionResult deletePodcast(Guid id, string authToken)
+    {
+        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(id + ":" + ConfigManager.getAuthToken()));
+        StringBuilder hashBuilder = new StringBuilder();
+        foreach (byte b in hashBytes) { hashBuilder.Append(b.ToString("x2")); }
+        //
+        if (hashBuilder.ToString() != authToken)
+        {
+            Console.WriteLine($"{authToken} did not match expected value");
+            return StatusCode(401);
+        }
+        Console.WriteLine($"AuthToken accepted, deleting podcast {id}");
+        var sql = @"DELETE FROM Podcasts WHERE @id = Id";
+        var episodeSql = @"SELECT Id FROM Episodes where PodcastId=@pid";
+        var episodeIds = SqLite.Connection().Query<string>(episodeSql, new {pid = id});
+        foreach (var eId in episodeIds)
+        {
+            DeletePodcastEpisode(id, eId);
+        }
+        Console.WriteLine($"Deleting podcast {id}");
+        var rows = SqLite.Connection().Execute(sql, new { id = id });
+        if (rows != 1)
+        {
+            throw new DataException();
+        }
+        FeedCache.metaDataCache.Remove(id);
+        return StatusCode(200);
     }
 
     [HttpPost("Queue")]

@@ -21,11 +21,7 @@ public class PodcastController : Controller
     [HttpPost("add")]
     public IActionResult addPodcast(Uri inUri, string authToken)
     {
-        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(inUri + ":" + ConfigManager.getAuthToken()));
-        StringBuilder hashBuilder = new StringBuilder();
-        foreach (byte b in hashBytes) { hashBuilder.Append(b.ToString("x2")); }
-        //
-        if (hashBuilder.ToString() != authToken)
+        if (ConfigManager.getAuthToken(inUri.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);
@@ -57,11 +53,7 @@ public class PodcastController : Controller
     [HttpDelete("delete")]
     public IActionResult deletePodcast(Guid id, string authToken)
     {
-        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(id + ":" + ConfigManager.getAuthToken()));
-        StringBuilder hashBuilder = new StringBuilder();
-        foreach (byte b in hashBytes) { hashBuilder.Append(b.ToString("x2")); }
-        //
-        if (hashBuilder.ToString() != authToken)
+        if (ConfigManager.getAuthToken(id.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);

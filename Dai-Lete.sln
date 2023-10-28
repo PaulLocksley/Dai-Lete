@@ -1,6 +1,6 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dai-Lete", "Dai-Lete\Dai-Lete.csproj", "{F815B8D7-06B5-4936-8F4E-75D3DA0783B0}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dai-Lete", "Dai-Lete\Dai-Lete.csproj", "{F815B8D7-06B5-4936-8F4E-75D3DA0783B0}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

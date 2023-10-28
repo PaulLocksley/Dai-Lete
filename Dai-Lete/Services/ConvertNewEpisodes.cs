@@ -1,9 +1,10 @@
+using System.Diagnostics;
 using System.IO.Compression;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dapper;
 
-namespace Dai_Lete.ScheduledTasks;
+namespace Dai_Lete.Services;
 
 public class ConvertNewEpisodes : IHostedService, IDisposable
 {
@@ -75,13 +76,20 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     private void processEpisode(Podcast podcast, string DownloadLink, string episodeGuid)
     {
         _logger.LogInformation($"Starting to process episode: {DownloadLink}");
-        PodcastServices.downloadEpsisode(podcast, DownloadLink,episodeGuid);
-        var filesize = PodcastServices.ProcessDownloadedEpisode(podcast.Id,episodeGuid);
-        var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
-        SqLite.Connection().Execute(sql, new { id = episodeGuid, pid = podcast.Id, fs = filesize });
-        //schedule a new copy of the item.
-        FeedCache.updateCache(podcast.Id);
-        _logger.LogInformation($"Completed processing episode: {DownloadLink}");
+        try
+        {
+            PodcastServices.DownloadEpisode(podcast, DownloadLink, episodeGuid);
+            var filesize = PodcastServices.ProcessDownloadedEpisode(podcast.Id, episodeGuid);
+            var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
+            SqLite.Connection().Execute(sql, new { id = episodeGuid, pid = podcast.Id, fs = filesize });
+            //schedule a new copy of the item.
+            FeedCache.updateCache(podcast.Id);
+            _logger.LogInformation($"Completed processing episode: {DownloadLink}");
+        }
+        catch (Exception e)
+        {
+            _logger.LogError($"Episode Processing Failed {e}");
+        }
 
     }
     

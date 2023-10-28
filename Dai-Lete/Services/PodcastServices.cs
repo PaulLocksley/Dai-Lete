@@ -6,7 +6,7 @@ using Dai_Lete.Repositories;
 using Dai_Lete.Services;
 using Dapper;
 
-namespace Dai_Lete.ScheduledTasks;
+namespace Dai_Lete.Services;
 
 public static class PodcastServices
 {
@@ -69,51 +69,69 @@ public static class PodcastServices
         throw new FileNotFoundException($"Could not find episode for podcast: {podcastId}");
     }
 
-    public static void downloadEpsisode(Podcast podcast, string episodeUrl,string episodeGuid)
+    public static void DownloadEpisode(Podcast podcast, string episodeUrl,string episodeGuid)
     {
         //setup clients.
-        var remoteHttmpClientHandler = new HttpClientHandler
+        var remoteHttpClientHandler = new HttpClientHandler
         {
             Proxy = new WebProxy($"socks5://{ConfigManager.getProxyAddress()}")
+            /*AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 10*/
+            
         };
-        var remoteHttpClient = new HttpClient(remoteHttmpClientHandler);
+        var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
         var localHttpClient = new HttpClient();
         
+        
+        
         //make folders.
-        var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
+        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
-        var destinationLocal = ($"{workingDirecory}{podcast.Id}{episodeGuid}.local");
-        var destinationRemote = ($"{workingDirecory}{podcast.Id}{episodeGuid}.remote");
+        var destinationLocal = ($"{workingDirectory}{podcast.Id}{episodeGuid}.local");
+        var destinationRemote = ($"{workingDirectory}{podcast.Id}{episodeGuid}.remote");
 
-        var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
+        try
         {
-            File.WriteAllBytes(destinationLocal, task.Result);
-        });
+            var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
+            {
+                File.WriteAllBytes(destinationLocal, task.Result);
+            });
 
-        
-        var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
-        {
-            File.WriteAllBytes(destinationRemote, task.Result);
-        });
 
-        while (!(d1.IsCompleted && d2.IsCompleted)) { Thread.Sleep(100); }
-        Console.WriteLine(d2.Status);
-        if (d2.IsFaulted || d1.IsFaulted)
-        {
-            throw new Exception($"{d1.Exception} \n {d2.Exception}");
+            var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
+            {
+                File.WriteAllBytes(destinationRemote, task.Result);
+            });
+
+            while (!(d1.IsCompleted && d2.IsCompleted))
+            {
+                Thread.Sleep(100);
+            }
+
+            Console.WriteLine(d2.Status);
+            if (d2.IsFaulted || d1.IsFaulted)
+            {
+                throw new Exception($"{d1.Exception} \n {d2.Exception}");
+            }
+
+            Console.WriteLine("Downloads apparently done.");
         }
-        Console.WriteLine("Downloads apparently done.");
+        catch (Exception e)
+        {
+            Debug.WriteLine("Downloads failed, aborting run");
+            throw;
+        }
     }
 
     public static int ProcessDownloadedEpisode(Guid id, string episodeId)
     {
-        var workingDirecory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
-        var preLocal = ($"{workingDirecory}{id}{episodeId}.local");
+        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
+        var preLocal = ($"{workingDirectory}{id}{episodeId}.local");
         var workingLocal = $"{preLocal}.wav";
-        var preRemote = ($"{workingDirecory}{id}{episodeId}.remote");
+        var preRemote = ($"{workingDirectory}{id}{episodeId}.remote");
         var workingRemote = $"{preLocal}.wav";
-        var processedFile = $"{workingDirecory}{id}{episodeId}processed.wav";
+        var processedFile = $"{workingDirectory}{id}{episodeId}processed.wav";
         var finalFolder = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{id}";
         var finalFile = $"{finalFolder}{Path.DirectorySeparatorChar}{episodeId}.mp3";
         if (!Directory.Exists(finalFolder))

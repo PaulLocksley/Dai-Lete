@@ -12,7 +12,7 @@ namespace Dai_Lete.Services;
 
 public static class PodcastServices
 {
-    private static readonly ILogger<ConvertNewEpisodes> _logger;
+    private static readonly ILogger<ConvertNewEpisodes> _logger = new Logger<ConvertNewEpisodes>(new LoggerFactory());
  
     
     public static List<Podcast> GetPodcasts()

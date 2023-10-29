@@ -35,7 +35,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         while (!PodcastQueue.toProcessQueue.IsEmpty)
         {
             //(Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
-            var deQueueResult = PodcastQueue.toProcessQueue.TryDequeue(out var episodeInfo);
+            var deQueueResult = PodcastQueue.toProcessQueue.TryPeek(out var episodeInfo);
             if (deQueueResult = false)
             {
                 return;
@@ -50,6 +50,8 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                 continue;
             }
             processEpisode(episodeInfo.podcast,episodeInfo.episodeUrl,episodeInfo.episodeGuid);
+            
+            PodcastQueue.toProcessQueue.TryDequeue(out _);
             processedEps++;
         }
         _logger.LogInformation($"Queue processed {processedEps} episodes");

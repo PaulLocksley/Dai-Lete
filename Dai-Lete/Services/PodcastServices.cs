@@ -115,7 +115,7 @@ public static class PodcastServices
                     Process process = new Process();
                     process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
                     process.StartInfo.Arguments =
-                        $""" -o "{destinationRemote}" -L --max-redirs 50 --socks5-hostname {ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
+                        $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
                     process.EnableRaisingEvents = false;
                     process.Start();
 

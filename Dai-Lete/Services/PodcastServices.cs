@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
@@ -90,7 +91,6 @@ public static class PodcastServices
         di.CreateSubdirectory("tmp");
         var destinationLocal = ($"{workingDirectory}{podcast.Id}{episodeGuid}.local");
         var destinationRemote = ($"{workingDirectory}{podcast.Id}{episodeGuid}.remote");
-
         try
         {
             var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
@@ -101,8 +101,35 @@ public static class PodcastServices
 
             var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
-                File.WriteAllBytes(destinationRemote, task.Result);
+                try
+                {
+                    File.WriteAllBytes(destinationRemote, task.Result);
+                }
+                catch (Exception e)
+                {
+                    //the HttpClient was being unreliable with a proxy for some reason...
+                    //hopefully one day this can be resolved.
+                    Debug.WriteLine($@"Error whilst downloading remote file:
+                            {e}
+                            Now attempting via Curl");
+                    Process process = new Process();
+                    process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
+                    process.StartInfo.Arguments =
+                        $""" -o "{destinationRemote}" -L --max-redirs 50 --socks5-hostname {ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
+                    process.EnableRaisingEvents = false;
+                    process.Start();
+
+                    process.WaitForExit();
+                    
+                    if (process.ExitCode != 0)
+                    {
+                        Debug.WriteLine($"Curl exited with non 0 code: {process.ExitCode}");
+                        throw;
+                    }
+                    Debug.WriteLine("Backup Curl download successful");
+                }
             });
+            
 
             while (!(d1.IsCompleted && d2.IsCompleted))
             {
@@ -119,7 +146,7 @@ public static class PodcastServices
         }
         catch (Exception e)
         {
-            Debug.WriteLine("Downloads failed, aborting run");
+            Debug.WriteLine($"Download failed of {episodeUrl}\n{e}");
             throw;
         }
     }

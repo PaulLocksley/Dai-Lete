@@ -12,6 +12,8 @@ namespace Dai_Lete.Services;
 
 public static class PodcastServices
 {
+    private static readonly ILogger<ConvertNewEpisodes> _logger;
+ 
     
     public static List<Podcast> GetPodcasts()
     {
@@ -90,7 +92,7 @@ public static class PodcastServices
         var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
-        var d2 = Task.CompletedTask;
+
         var destinationLocal = ($"{workingDirectory}{podcast.Id}{episodeGuid}.local");
         var destinationRemote = ($"{workingDirectory}{podcast.Id}{episodeGuid}.remote");
         try
@@ -99,45 +101,56 @@ public static class PodcastServices
             {
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
-
-            //the HttpClient was being unreliable with a proxy for some reason...
-            //hopefully one day this can be resolved.
-            Process process = new Process();
-            process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
-            process.StartInfo.Arguments =
-                $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
-            process.EnableRaisingEvents = false;
-            process.Start();
-
-            process.WaitForExit();
-            
-            if (process.ExitCode != 0)
+            var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
-                throw new ConnectionAbortedException(@$"Curl exited with non 0 code: {process.ExitCode}
-                    {process.StartInfo.FileName} {process.StartInfo.Arguments}");
-            }
-            Debug.WriteLine("Backup Curl download successful");
+                try
+                {
+                    File.WriteAllBytes(destinationRemote, task.Result);
+                }
+                catch (Exception e)
+                {
+                    _logger.LogInformation("remoteHttpClient failed, Trying Curl");
+                    //the HttpClient was being unreliable with a proxy for some reason...
+                    //hopefully one day this can be resolved.
+                    var process = new Process();
+                    process.StartInfo.FileName =
+                        RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
+                    process.StartInfo.Arguments =
+                        $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
+                    process.EnableRaisingEvents = false;
+                    process.Start();
+
+                    process.WaitForExit();
+
+                    if (process.ExitCode != 0)
+                    {
+                        throw new ConnectionAbortedException(@$"Curl exited with non 0 code: {process.ExitCode}
+                            {process.StartInfo.FileName} {process.StartInfo.Arguments}");
+                    }
+                    _logger.LogInformation("Backup Curl download successful");
+                }
+            });
 
 
-
-            d1.Wait();
-            Console.WriteLine(d2.Status);
-            if (d1.Status != TaskStatus.RanToCompletion)
+                d1.Wait();
+                d2.Wait();
+                if (d1.Status != TaskStatus.RanToCompletion || d2.Status != TaskStatus.RanToCompletion)
             {
-                throw d1.Exception!;
+                throw new Exception($"{d1.Exception} \n {d2.Exception}");
             }
 
-            Console.WriteLine("Downloads apparently done.");
+            _logger.LogInformation("Downloads apparently done.");
         }
         catch (Exception e)
         {
-            Debug.WriteLine($"Download failed of {episodeUrl}\n{e}");
+            _logger.LogWarning($"Download failed of {episodeUrl}\n{e}");
             throw;
         }
     }
 
     public static int ProcessDownloadedEpisode(Guid id, string episodeId)
     {
+        _logger.LogInformation($"Starting to process {episodeId}");
         var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
         var preLocal = ($"{workingDirectory}{id}{episodeId}.local");
         var workingLocal = $"{preLocal}.wav";
@@ -228,7 +241,8 @@ public static class PodcastServices
         File.Delete(preRemote);
         File.Delete(workingRemote);
         File.Delete(processedFile);
-
+        
+        _logger.LogInformation($"Completed processing {episodeId}");
         return (int)new FileInfo(finalFile).Length;
     }
     

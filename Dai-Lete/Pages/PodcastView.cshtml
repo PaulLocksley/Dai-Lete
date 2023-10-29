@@ -30,7 +30,8 @@
         <div>
             <h1>@podcastMetadata.title</h1>
             <p>@podcastMetadata.publisher</p>
-            <p>@podcastMetadata.description</p>
+            <p>@Html.Raw(podcastMetadata.description)</p>
+            @*            todo, a better way        *@
         </div>
         <hr/>
         <h3>

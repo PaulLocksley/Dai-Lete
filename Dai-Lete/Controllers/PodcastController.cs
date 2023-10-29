@@ -9,7 +9,6 @@ using System.Text;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
-using Dai_Lete.ScheduledTasks;
 using Dai_Lete.Services;
 using Dapper;
 

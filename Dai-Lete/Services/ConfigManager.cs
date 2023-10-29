@@ -29,3 +29,5 @@ public static class ConfigManager
         return proxyAddress ?? "192.168.20.56:1080";
     }
 }
+
+

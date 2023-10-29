@@ -1,11 +1,9 @@
-using System.Net;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
-using Dai_Lete.Services;
 using Dapper;
 
-namespace Dai_Lete.ScheduledTasks;
+namespace Dai_Lete.Services;
 
 public class XmlService
 {
@@ -16,7 +14,6 @@ public class XmlService
         
         string metaDataName = String.Empty;
         Uri? metaDataImageUrl = null;
-        Uri? episodeDownloadUrl = null;
         string metaDataAuthor = String.Empty;
         string metaDataDescription = String.Empty;
         IList<PodcastEpisodeMetadata> processedEpisodes = new List<PodcastEpisodeMetadata>();

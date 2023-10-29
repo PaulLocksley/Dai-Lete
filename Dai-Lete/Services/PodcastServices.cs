@@ -6,6 +6,7 @@ using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
 using Dapper;
+using Microsoft.AspNetCore.Connections;
 
 namespace Dai_Lete.Services;
 
@@ -89,6 +90,7 @@ public static class PodcastServices
         var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
+        var d2 = Task.CompletedTask;
         var destinationLocal = ($"{workingDirectory}{podcast.Id}{episodeGuid}.local");
         var destinationRemote = ($"{workingDirectory}{podcast.Id}{episodeGuid}.remote");
         try
@@ -98,48 +100,31 @@ public static class PodcastServices
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
 
+            //the HttpClient was being unreliable with a proxy for some reason...
+            //hopefully one day this can be resolved.
+            Process process = new Process();
+            process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
+            process.StartInfo.Arguments =
+                $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
+            process.EnableRaisingEvents = false;
+            process.Start();
 
-            var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
-            {
-                try
-                {
-                    File.WriteAllBytes(destinationRemote, task.Result);
-                }
-                catch (Exception e)
-                {
-                    //the HttpClient was being unreliable with a proxy for some reason...
-                    //hopefully one day this can be resolved.
-                    Debug.WriteLine($@"Error whilst downloading remote file:
-                            {e}
-                            Now attempting via Curl");
-                    Process process = new Process();
-                    process.StartInfo.FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
-                    process.StartInfo.Arguments =
-                        $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
-                    process.EnableRaisingEvents = false;
-                    process.Start();
-
-                    process.WaitForExit();
-                    
-                    if (process.ExitCode != 0)
-                    {
-                        Debug.WriteLine($"Curl exited with non 0 code: {process.ExitCode}");
-                        throw;
-                    }
-                    Debug.WriteLine("Backup Curl download successful");
-                }
-            });
+            process.WaitForExit();
             
-
-            while (!(d1.IsCompleted && d2.IsCompleted))
+            if (process.ExitCode != 0)
             {
-                Thread.Sleep(100);
+                throw new ConnectionAbortedException(@$"Curl exited with non 0 code: {process.ExitCode}
+                    {process.StartInfo.FileName} {process.StartInfo.Arguments}");
             }
+            Debug.WriteLine("Backup Curl download successful");
 
+
+
+            d1.Wait();
             Console.WriteLine(d2.Status);
-            if (d2.IsFaulted || d1.IsFaulted)
+            if (d1.Status != TaskStatus.RanToCompletion)
             {
-                throw new Exception($"{d1.Exception} \n {d2.Exception}");
+                throw d1.Exception!;
             }
 
             Console.WriteLine("Downloads apparently done.");

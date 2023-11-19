@@ -4,7 +4,7 @@
 @using Dai_Lete.Services
 @model IndexModel
 @{
-    ViewData["Title"] = "Home page";
+    ViewData["Title"] = "Podcasts";
 }
 <script>
 function copyRssFeed(ID) {
@@ -60,27 +60,31 @@ async function addPodcast(){
 
 </script>
 <div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-</div>
-
-<div class="hstack">
-    <h3>Podcast URI: </h3><input type="text" id="inputUri" name="inputUri" >
-    <h3> Password: </h3><input type="text" id="inputPassword" name="inputPassword" >
-    <button onclick="addPodcast()">Add Podcast</button>
+    <h1 class="display-4">Welcome to Dai-Lete 
+        <br/>
+        The "It Kind of Works" of Podcast Ad Block
+    </h1>
 </div>
 
 <div class="d-flex p-2 flex-wrap">
-
+    <div class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded vstack"
+         style="width: 19%; min-width: 200px">
+        <h3>Podcast URI: </h3><input type="text" id="inputUri" name="inputUri">
+        <h3> Password: </h3><input type="password" id="inputPassword" name="inputPassword">
+        <br/>
+        <button class="btn-primary rounded" onclick="addPodcast()">Add Podcast</button>
+    </div>
+<br/>
     @foreach (var pod in FeedCache.metaDataCache)
     {
         <div id="pod-card-@pod.Key" 
-            class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded-5;" 
+            class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded" 
              style="width: 19%; min-width: 200px">
             <img class="align-content-center h-auto rounded-2"src="@pod.Value.imageUrl"/>
             
             <div class="d-inline-flex flex-column h-50 w-75">
                 <a href="PodcastView?id=@pod.Key">
-                    <h3>@pod.Value.title</h3>
+                    <h5>@pod.Value.title</h5>
                 </a>
                 <p class="card-subtitle">@pod.Value.publisher</p>
             </div>

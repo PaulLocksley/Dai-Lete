@@ -12,13 +12,8 @@
         podcastMetadata = FeedCache.metaDataCache[Model.podcastID.Value];
     }
     Console.WriteLine("1"+Model.podcastID);
+    ViewData["Title"] = podcastMetadata.title;
 }
-
-<head>
-    <title>@podcastMetadata.title</title>
-</head>
-
-
 <body>
 <div class="container-fluid">
     @if (@Model.podcastID is null)

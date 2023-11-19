@@ -12,6 +12,7 @@ This program uses the fact that the same ad will likely never be run across the 
 3. Generate a new mp3 containing only the segmnts in both files.
 4. Replace the link in the podcast feed dynamically to point to your new file whilst keeping the rest of the feed identical.  
 
+## Populated Dashboard Example
 ![Dashboard screenshot](https://i.imgur.com/Kiqg4hL.png)
 
 

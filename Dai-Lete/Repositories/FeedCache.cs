@@ -10,7 +10,7 @@ public static class FeedCache
     //todo mark fields private.
     public static IDictionary<Guid, XmlDocument> feedCache = new ConcurrentDictionary<Guid, XmlDocument>();
     public static IDictionary<Guid, PodcastMetadata> metaDataCache = new ConcurrentDictionary<Guid, PodcastMetadata>();
-    public static async Task updateCache(Guid id)
+    public static async Task UpdatePodcastCache(Guid id)
     {
         feedCache[id] = XmlService.GenerateNewFeed(id);
     }
@@ -24,9 +24,9 @@ public static class FeedCache
         var plist = PodcastServices.GetPodcasts();
         foreach (var podcast in plist)
         {
-            updateCache(podcast.Id);
+            UpdatePodcastCache(podcast.Id);
         }
         Console.WriteLine($"Feeds buld, cache contains {feedCache.Count} items");
     }
-     
+    
 }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO.Compression;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
@@ -8,16 +9,16 @@ namespace Dai_Lete.Services;
 
 public class ConvertNewEpisodes : IHostedService, IDisposable
 {
-    private int executionCount = 0;
     private readonly ILogger<ConvertNewEpisodes> _logger;
     private Timer? _timer = null;
     private Timer? _QueueTimer = null;
-
+    private bool _QueueLock = false;
     public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger)
     {
         _logger = logger;
     }
-
+    
+    
     public Task StartAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Timed Hosted Service running.");
@@ -30,34 +31,46 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
 
     private void CheckQueue(Object? state)
     {
-        _logger.LogInformation("Checking Queue for processeing episodes.");
-        int processedEps = 0;
-        while (!PodcastQueue.toProcessQueue.IsEmpty)
+        if (_QueueLock)
         {
-            //(Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
-            var deQueueResult = PodcastQueue.toProcessQueue.TryPeek(out var episodeInfo);
-            if (deQueueResult = false)
-            {
-                return;
-            }
-
-            var sql = "Select Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
-            var isPresentList = SqLite.Connection().Query<string>(sql,
-                new { pId = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
-            if (isPresentList.Any())
-            {
-                _logger.LogInformation($"Episode {episodeInfo.episodeGuid} found in database, skipping");
-                continue;
-            }
-            processEpisode(episodeInfo.podcast,episodeInfo.episodeUrl,episodeInfo.episodeGuid);
-            
-            PodcastQueue.toProcessQueue.TryDequeue(out _);
-            processedEps++;
+            _logger.LogInformation("Queued work in progress but service attempted to check for latest episodes");
+            return;
         }
-        _logger.LogInformation($"Queue processed {processedEps} episodes");
+        _logger.LogInformation("Checking Queue for processing episodes.");
+        _QueueLock = true;
+        try
+        {
+            int processedEps = 0;
+            while (!PodcastQueue.toProcessQueue.IsEmpty)
+            {
+                //(Podcast podcast, string episodeUrl,string episodeGuid) episodeInfo;
+                var deQueueResult = PodcastQueue.toProcessQueue.TryDequeue(out var episodeInfo);
+                if (!deQueueResult) { return; }
+
+                var sql = "Select Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
+                var isPresentList = SqLite.Connection().Query<string>(sql,
+                    new { pId = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
+                if (isPresentList.Any())
+                {
+                    _logger.LogInformation($"Episode {episodeInfo.episodeGuid} found in database, skipping");
+                    continue;
+                }
+
+                processEpisode(episodeInfo.podcast, episodeInfo.episodeUrl, episodeInfo.episodeGuid);
+                processedEps++;
+            }
+            _QueueLock = false;
+            _logger.LogInformation($"Queue processed {processedEps} episodes");
+        }
+        catch (Exception e)
+        {
+            _QueueLock = false;
+            throw;
+        }
     }
     private void CheckFeeds(object? state)
     {
+        
         var plist = PodcastServices.GetPodcasts();
         foreach (var podcast in plist)
         {
@@ -85,7 +98,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";
             SqLite.Connection().Execute(sql, new { id = episodeGuid, pid = podcast.Id, fs = filesize });
             //schedule a new copy of the item.
-            FeedCache.updateCache(podcast.Id);
+            _ = FeedCache.UpdatePodcastCache(podcast.Id);
             _logger.LogInformation($"Completed processing episode: {DownloadLink}");
         }
         catch (Exception e)

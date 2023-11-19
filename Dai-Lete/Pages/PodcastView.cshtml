@@ -27,12 +27,17 @@
     }
     else
     {
-        <div>
-            <h1>@podcastMetadata.title</h1>
-            <p>@podcastMetadata.publisher</p>
-            <p>@Html.Raw(podcastMetadata.description)</p>
-            @*            todo, a better way        *@
-        </div>
+            <div class="hstack border-primary">
+                <div class="vstack w-25">
+                    <img width="200" class="h-auto" src="@podcastMetadata.imageUrl"/>
+                </div>
+                <div class="w-75">
+                    <h1>@podcastMetadata.title</h1>
+                    <p>@podcastMetadata.publisher</p>
+                    <p>@Html.Raw(podcastMetadata.description)</p>
+                    @*            todo, a better way        *@
+                </div>
+            </div>
         <hr/>
         <h3>
             Dai-Leted Episodes:

@@ -1,3 +1,4 @@
+using System.Collections.Immutable;
 using System.Data;
 using System.Net;
 using System.Runtime.Intrinsics.Arm;
@@ -46,7 +47,8 @@ public class PodcastController : Controller
         {
             throw new DataException();
         }
-        // todo queue metadata
+        
+        _ = FeedCache.UpdatePodcastCache(p.Id);
         return StatusCode(200,p.Id);
     }
     [HttpDelete("delete")]

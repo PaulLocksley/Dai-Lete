@@ -92,7 +92,9 @@ public static class PodcastServices
         };
         var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
         var localHttpClient = new HttpClient();
-        localHttpClient.DefaultRequestHeaders.Add("User-Agent", "Overcast/3.0 (+http://overcast.fm/; iOS podcast app)"); 
+        localHttpClient.DefaultRequestHeaders.Add("User-Agent","Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1" ); 
+        remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"); 
+        
         
         
         //make folders.
@@ -111,10 +113,12 @@ public static class PodcastServices
         {
             var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
+                _logger.LogInformation("local download started");
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
             var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
+                _logger.LogInformation("remote download started");
                 try
                 {
                     File.WriteAllBytes(destinationRemote, task.Result);

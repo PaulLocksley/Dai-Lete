@@ -42,9 +42,13 @@ public class XmlService
         {
             throw new Exception($"Failed to parse {podcast.InUri}");
         }
-        foreach (XmlElement node in RssFeed.DocumentElement.ChildNodes)
+
+        var root = RssFeed.DocumentElement;
+        XmlElement? newLinkChild = null;
+        XmlElement? newLinkParent = null;
+        
+        foreach (XmlElement node in root.ChildNodes)
         {
-            
             foreach (XmlElement n2 in node.ChildNodes)
             {
                 if (n2.Name != "item")
@@ -65,7 +69,8 @@ public class XmlService
                             metaDataImageUrl = new Uri(n2.Attributes.GetNamedItem("href").InnerText);
                             break;
                         case "itunes:new-feed-url":
-                            node.RemoveChild(n2);
+                            newLinkParent = node;
+                            newLinkChild = n2;
                             break;
                     }
                     continue;
@@ -109,7 +114,10 @@ public class XmlService
         FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                 metaDataImageUrl, metaDataDescription,
                                                                 processedEpisodes,nonProcessedEpisodes));
-        
+        if (newLinkParent is not null && newLinkChild is not null)
+        {
+            newLinkParent.RemoveChild(newLinkChild);
+        } 
         return RssFeed;
     }
 

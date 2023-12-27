@@ -25,7 +25,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
 
         _timer = new Timer(CheckFeeds, null, TimeSpan.Zero,
             TimeSpan.FromHours(1));
-        _QueueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, TimeSpan.FromMinutes(5)); 
+        _QueueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(10)); 
         return Task.CompletedTask;
     }
 
@@ -60,6 +60,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                 processedEps++;
             }
             _QueueLock = false;
+            if(processedEps > 0){}
             _logger.LogInformation($"Queue processed {processedEps} episodes");
         }
         catch (Exception e)
@@ -93,6 +94,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         _logger.LogInformation($"Starting to process episode: {DownloadLink}");
         try
         {
+            //episodeGuid = string.Concat(episodeGuid.Split(Path.GetInvalidFileNameChars()));
             PodcastServices.DownloadEpisode(podcast, DownloadLink, episodeGuid);
             var filesize = PodcastServices.ProcessDownloadedEpisode(podcast.Id, episodeGuid);
             var sql = @"INSERT INTO Episodes (Id,PodcastId,FileSize) VALUES (@id,@pid,@fs)";

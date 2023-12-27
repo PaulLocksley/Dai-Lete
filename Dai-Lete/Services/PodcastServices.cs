@@ -51,12 +51,16 @@ public static class PodcastServices
                     continue;
                 }
 
-                XmlNode? guid = null;
+                string? guid = null;
                 XmlNode? enclosure = null;
                 String downloadLink = null;
                 foreach (XmlElement n3 in n2.ChildNodes)
                 {
-                    if (n3.Name == "guid") { guid = n3;}
+                    if (n3.Name == "guid")
+                    {
+                        guid = string.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));
+                    }
+
                     if (n3.Name == "enclosure") { enclosure = n3;}
                 }
                 foreach (XmlAttribute atr in enclosure.Attributes) {
@@ -66,8 +70,11 @@ public static class PodcastServices
                         break;
                     }
                 }
-
-                return(guid: guid.InnerText,downloadLink:downloadLink);
+                if (downloadLink is null || guid is null)
+                {
+                    throw new Exception($"Failed to parse {podcast.InUri}");
+                }
+                return(guid: guid,downloadLink:downloadLink);
             }
         }
         throw new FileNotFoundException($"Could not find episode for podcast: {podcastId}");
@@ -85,16 +92,21 @@ public static class PodcastServices
         };
         var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
         var localHttpClient = new HttpClient();
-        
+        localHttpClient.DefaultRequestHeaders.Add("User-Agent", "Overcast/3.0 (+http://overcast.fm/; iOS podcast app)"); 
         
         
         //make folders.
         var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
         var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
         di.CreateSubdirectory("tmp");
+        if (!Directory.Exists($"{workingDirectory}{podcast.Id}"))
+        {
+            Directory.CreateDirectory($"{workingDirectory}{podcast.Id}");
+        }
 
-        var destinationLocal = ($"{workingDirectory}{podcast.Id}{episodeGuid}.local");
-        var destinationRemote = ($"{workingDirectory}{podcast.Id}{episodeGuid}.remote");
+        workingDirectory = $"{workingDirectory}{podcast.Id}{Path.DirectorySeparatorChar}";
+        var destinationLocal = ($"{workingDirectory}{episodeGuid}.local");
+        var destinationRemote = ($"{workingDirectory}{episodeGuid}.remote");
         try
         {
             var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
@@ -151,12 +163,12 @@ public static class PodcastServices
     public static int ProcessDownloadedEpisode(Guid id, string episodeId)
     {
         _logger.LogInformation($"Starting to process {episodeId}");
-        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";
-        var preLocal = ($"{workingDirectory}{id}{episodeId}.local");
+        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}{id}{Path.DirectorySeparatorChar}";
+        var preLocal = ($"{workingDirectory}{episodeId}.local");
         var workingLocal = $"{preLocal}.wav";
-        var preRemote = ($"{workingDirectory}{id}{episodeId}.remote");
+        var preRemote = ($"{workingDirectory}{episodeId}.remote");
         var workingRemote = $"{preLocal}.wav";
-        var processedFile = $"{workingDirectory}{id}{episodeId}processed.wav";
+        var processedFile = $"{workingDirectory}{episodeId}processed.wav";
         var finalFolder = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{id}";
         var finalFile = $"{finalFolder}{Path.DirectorySeparatorChar}{episodeId}.mp3";
         if (!Directory.Exists(finalFolder))

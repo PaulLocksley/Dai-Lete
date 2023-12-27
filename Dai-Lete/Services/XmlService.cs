@@ -67,15 +67,15 @@ public class XmlService
                     continue;
                 }
 
-                XmlNode? guid = null;
+                string? guid = null;
                 XmlNode? enclosure = null;
                 foreach (XmlElement n3 in n2.ChildNodes)
                 {
-                    if (n3.Name == "guid") { guid = n3;}
+                    if (n3.Name == "guid") { guid = String.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));}
                     if (n3.Name == "enclosure") { enclosure = n3;}
                 }
 
-                if(episodes.ContainsKey(guid.InnerText))
+                if(episodes.ContainsKey(guid))
                 {
                     processedEpisodes.Add(GetEpisodeMetaData(n2,podcast));
                     foreach (XmlAttribute atr in enclosure.Attributes)
@@ -83,10 +83,10 @@ public class XmlService
                         switch (atr.Name)
                         {
                             case "url":
-                                atr.Value = $"https://{ConfigManager.getBaseAddress()}/Podcasts/{podcastId}/{guid.InnerText}.mp3";
+                                atr.Value = $"https://{ConfigManager.getBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
                                 break;
                             case "length":
-                                atr.Value = episodes[guid.InnerText].ToString();
+                                atr.Value = episodes[guid].ToString();
                                 break;
                             case "type":
                                 atr.Value = "audio/mpeg";
@@ -124,7 +124,7 @@ public class XmlService
                     pm.description = node.InnerText;
                     break;
                 case "guid":
-                    pm.episodeId = node.InnerText;
+                    pm.episodeId = string.Concat(node.InnerText.Split(Path.GetInvalidFileNameChars()));
                     break;
                 case "pubDate":
                     pm.pubDate = DateTime.Parse(node.InnerText);

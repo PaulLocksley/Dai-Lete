@@ -44,6 +44,7 @@ public class XmlService
         }
         foreach (XmlElement node in RssFeed.DocumentElement.ChildNodes)
         {
+            
             foreach (XmlElement n2 in node.ChildNodes)
             {
                 if (n2.Name != "item")
@@ -62,6 +63,9 @@ public class XmlService
                             break;
                         case "itunes:image":
                             metaDataImageUrl = new Uri(n2.Attributes.GetNamedItem("href").InnerText);
+                            break;
+                        case "itunes:new-feed-url":
+                            node.RemoveChild(n2);
                             break;
                     }
                     continue;
@@ -100,7 +104,7 @@ public class XmlService
                 }
             }
         }
-        
+
         //metadata area.
         FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                 metaDataImageUrl, metaDataDescription,

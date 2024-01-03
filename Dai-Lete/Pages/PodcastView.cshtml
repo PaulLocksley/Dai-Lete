@@ -3,8 +3,6 @@
 @using Dai_Lete.Repositories
 @using Dai_Lete.Models
 @model Dai_Lete.Pages.PodcastView
-
-
 @{
     PodcastMetadata podcastMetadata = new PodcastMetadata();
     if (Model.podcastID is not null)
@@ -49,16 +47,22 @@
             @foreach (var p in @podcastMetadata.processedEpisodes)
             {
                 <tr>
-                    <td>@p.episodeName</td>
-
-                    <td>@p.pubDate</td>
-                <td>
-                    <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId">
-                        Delete Episode
-                    </button>
-
+                    <td>@p.episodeName
+                        <br/>
+                        
+                        <audio controls>
+                        <source src=@Html.Raw($"https://{ConfigManager.getBaseAddress()}/Podcasts/{p.Podcast.Id}/{String.Concat(p.episodeId.Split(Model.InvalidChars))}.mp3")
+                                type="audio/mpeg">
+                        </audio>
                     </td>
 
+                    <td>@p.pubDate</td>
+                    <td>
+                        <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId">
+                            Delete Episode
+                        </button>
+
+                    </td>
                 </tr>
             }
             </tbody>
@@ -85,7 +89,7 @@
                         <button type="submit">Process Episode</button>
                     </form>
                     *@
-                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId">Process2</button>
+                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId">Process Episode</button>
                 </div>
             </div>
         }

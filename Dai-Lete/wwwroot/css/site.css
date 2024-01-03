@@ -20,3 +20,7 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+#processedEpisodes > tbody > tr > td {
+  padding: 10px;
+}

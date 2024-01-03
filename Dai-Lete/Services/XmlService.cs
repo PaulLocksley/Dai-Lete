@@ -74,7 +74,7 @@ public class XmlService
                 XmlNode? enclosure = null;
                 foreach (XmlElement n3 in n2.ChildNodes)
                 {
-                    if (n3.Name == "guid") { guid = String.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));}
+                    if (n3.Name == "guid") { guid = String.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));}//todo: Set this globally.
                     if (n3.Name == "enclosure") { enclosure = n3;}
                 }
 

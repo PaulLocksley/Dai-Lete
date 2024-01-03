@@ -8,6 +8,7 @@ public class PodcastView : PageModel
     [FromQuery(Name = "id")]
     public Guid? podcastID { get; set; }
 
+    public char[] InvalidChars = Path.GetInvalidFileNameChars();
     
     public void OnGet()
     {

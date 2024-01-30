@@ -71,22 +71,33 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     }
     private void CheckFeeds(object? state)
     {
-        
         var plist = PodcastServices.GetPodcasts();
         foreach (var podcast in plist)
         {
-            var sql = "Select Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
-            var latest = PodcastServices.GetLatestEpsiode(podcast.Id);
-            var episodeList = SqLite.Connection().Query<string>(sql, new {eid = latest.guid,pid = podcast.Id });
-            
-            if (episodeList.Any())
+            try
             {
-                _logger.LogInformation($"No new episodes of {podcast.InUri}");
-                continue;
+                var sql = "Select Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
+                var latest = PodcastServices.GetLatestEpsiode(podcast.Id);
+                var episodeList = SqLite.Connection().Query<string>(sql, new { eid = latest.guid, pid = podcast.Id });
+
+                if (episodeList.Any())
+                {
+                    _logger.LogInformation($"No new episodes of {podcast.InUri}");
+                    continue;
+                }
+
+                _logger.LogInformation($"New episodes of {podcast.InUri}");
+                processEpisode(podcast, latest.downloadLink, latest.guid);
             }
-            _logger.LogInformation($"New episodes of {podcast.InUri}");
-            processEpisode(podcast,latest.downloadLink,latest.guid);
+            catch (Exception e)
+            {
+                _logger.LogError($"Failed to parse episode of {podcast.InUri}");
+                _logger.LogError(e.Source);
+                _logger.LogError(e.Message);
+                _logger.LogError(e.StackTrace);
+            }
         }
+       
     }
 
     private void processEpisode(Podcast podcast, string DownloadLink, string episodeGuid)

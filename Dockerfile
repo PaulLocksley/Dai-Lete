@@ -8,7 +8,7 @@ ARG accessToken=12345
 
 
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 COPY ["Dai-Lete/Dai-Lete.csproj", "Dai-Lete/"]
 RUN dotnet restore "Dai-Lete/Dai-Lete.csproj"

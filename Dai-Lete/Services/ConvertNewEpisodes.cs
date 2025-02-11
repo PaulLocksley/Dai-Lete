@@ -116,6 +116,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         }
         catch (Exception e)
         {
+            _ = FeedCache.UpdatePodcastCache(podcast.Id);
             _logger.LogError($"Episode Processing Failed {e}");
         }
 

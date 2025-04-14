@@ -8,7 +8,8 @@ public class SqLite
         private static bool _dbSetup = false;
         public static string DbFile
         {
-            get { return Environment.CurrentDirectory + $"{Path.DirectorySeparatorChar}Podcasts.sqlite"; }//todo config
+            
+            get { return $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}Podcasts.sqlite"; }//todo config
         }
 
         private static void DbSetup()

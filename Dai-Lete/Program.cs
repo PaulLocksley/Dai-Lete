@@ -19,6 +19,9 @@ builder.Services.AddMvc()
     .AddMvcOptions(o => o.OutputFormatters.Add(new XmlDataContractSerializerOutputFormatter()));
 //Add http client for redirects.
 builder.Services.AddHttpClient();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<RedirectCache>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

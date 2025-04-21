@@ -2,7 +2,7 @@
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
-RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg
+RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg curl
 ENV baseAddress=pod.locksley.dev
 ENV accessToken=12345
 ENV proxyAddress=prx.locksley.dev

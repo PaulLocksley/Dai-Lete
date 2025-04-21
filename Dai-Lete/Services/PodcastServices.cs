@@ -114,37 +114,20 @@ public static class PodcastServices
             var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
                 _logger.LogInformation("local download started");
+                if (task.IsFaulted)
+                {
+                    Console.WriteLine($"Local download failed: {task.Exception}");
+                }
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
             var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
                 _logger.LogInformation("remote download started");
-                try
+                if (task.IsFaulted)
                 {
-                    File.WriteAllBytes(destinationRemote, task.Result);
+                    Console.WriteLine($"remote download failed: {task.Exception}");
                 }
-                catch (Exception e)
-                {
-                    _logger.LogInformation("remoteHttpClient failed, Trying Curl");
-                    //the HttpClient was being unreliable with a proxy for some reason...
-                    //hopefully one day this can be resolved.
-                    var process = new Process();
-                    process.StartInfo.FileName =
-                        RuntimeInformation.IsOSPlatform(OSPlatform.Linux) ? "curl" : "curl.exe";
-                    process.StartInfo.Arguments =
-                        $""" -o "{destinationRemote}" -L --max-redirs 50 -x socks5://{ConfigManager.getProxyAddress()} --max-time 160 "{episodeUrl}" """;
-                    process.EnableRaisingEvents = false;
-                    process.Start();
-
-                    process.WaitForExit();
-
-                    if (process.ExitCode != 0)
-                    {
-                        throw new ConnectionAbortedException(@$"Curl exited with non 0 code: {process.ExitCode}
-                            {process.StartInfo.FileName} {process.StartInfo.Arguments}");
-                    }
-                    _logger.LogInformation("Backup Curl download successful");
-                }
+                File.WriteAllBytes(destinationRemote, task.Result);
             });
 
 

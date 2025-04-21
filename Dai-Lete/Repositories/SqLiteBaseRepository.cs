@@ -26,6 +26,11 @@ public class SqLite
                     FileSize INTEGER
                 )";
             tmpConnection.Execute(sql);
+            sql  = @"CREATE TABLE IF NOT EXISTS Redirects (
+                    Id text PRIMARY KEY,
+                    OriginalLink  text
+                )";
+            tmpConnection.Execute(sql);
             _dbSetup = true;
         }
         public static SqliteConnection Connection()

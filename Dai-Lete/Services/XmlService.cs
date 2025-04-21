@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
@@ -42,7 +44,8 @@ public class XmlService
         {
             throw new Exception($"Failed to parse {podcast.InUri}");
         }
-
+        ProcessPreProcessingInstructions(RssFeed,$"{podcast.InUri.Scheme}://{podcast.InUri.Host}" +
+                                                 (podcast.InUri.IsDefaultPort ? "" : $":{podcast.InUri.Port}"));
         var root = RssFeed.DocumentElement;
         
         foreach (XmlElement node in root.ChildNodes)
@@ -147,5 +150,37 @@ public class XmlService
             }
         }
         return pm;
+    }
+
+    private static void ProcessPreProcessingInstructions(XmlDocument xmlDocument, string baseUri)
+    {
+        try
+        {
+
+
+            const string matchPattern = """(.*href=["|'])(\/.+)(["|'].*)""";
+
+            foreach (XmlNode node in xmlDocument.ChildNodes)
+            {
+                if (node is not XmlProcessingInstruction || node.Value is null)
+                {
+                    continue;
+                }
+
+                var match = Regex.Match(node.Value, matchPattern);
+                if (!match.Success)
+                {
+                    continue;
+                }
+
+                var url = baseUri + match.Groups[2].Value;
+                var redirectLink = RedirectService.GetOrCreateRedirectLink(url);
+                node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}{match.Groups[3].Value}";
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
     }
 }

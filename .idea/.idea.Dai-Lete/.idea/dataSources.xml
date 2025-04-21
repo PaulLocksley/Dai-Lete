@@ -5,7 +5,10 @@
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/Dai-Lete/Podcasts.sqlite</jdbc-url>
+      <jdbc-url>jdbc:sqlite:C:\Users\Paull\Projects\Dai-Lete\Dai-Lete\bin\Debug\net8.0\Podcasts\Podcasts.sqlite</jdbc-url>
+      <jdbc-additional-properties>
+        <property name="com.intellij.clouds.kubernetes.db.enabled" value="false" />
+      </jdbc-additional-properties>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
   </component>

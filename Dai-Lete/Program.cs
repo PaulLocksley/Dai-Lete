@@ -17,7 +17,8 @@ builder.Services.AddHostedService<ConvertNewEpisodes>();
 builder.Services.AddRazorPages();
 builder.Services.AddMvc()
     .AddMvcOptions(o => o.OutputFormatters.Add(new XmlDataContractSerializerOutputFormatter()));
-
+//Add http client for redirects.
+builder.Services.AddHttpClient();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -51,17 +52,6 @@ app.UseStaticFiles(new StaticFileOptions
         Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts")),
     RequestPath = "/Podcasts"
 });
-//this is a silly hack to avoid fixing a bug.
-//shows can contain local links to other files on that host that I'm not reflecting.
-//it's hard to process because they are in the xml decorators and apparently they aren't rendered as normal nodes.
-//todo: work out accessing base url and replacing all instances of local links with base url
-app.UseStaticFiles(new StaticFileOptions
-{
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts")),
-    RequestPath = "/global"
-});
-
 app.UseRouting();
 
 app.UseAuthorization();

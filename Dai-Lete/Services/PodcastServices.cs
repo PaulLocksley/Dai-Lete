@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
+using Dai_Lete.Utilities;
 using Dai_Lete.Services;
 using Dapper;
 using Microsoft.AspNetCore.Connections;
@@ -93,7 +94,7 @@ public static class PodcastServices
         var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
         var localHttpClient = new HttpClient();
         localHttpClient.DefaultRequestHeaders.Add("User-Agent","Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1" ); 
-        remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1"); 
+        remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1"); 
         
         
         
@@ -124,8 +125,9 @@ public static class PodcastServices
             {
                 _logger.LogInformation("remote download started");
                 if (task.IsFaulted)
-                {
-                    Console.WriteLine($"remote download failed: {task.Exception}");
+                {   
+                    _logger.LogError("remote download failed: {AggregateException}", task.Exception);
+                    throw task.Exception;
                 }
                 File.WriteAllBytes(destinationRemote, task.Result);
             });
@@ -162,7 +164,15 @@ public static class PodcastServices
         {
             DirectoryInfo di = Directory.CreateDirectory(finalFolder);
         }
-
+        
+        if(FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
+        {
+            _logger.LogWarning($"Episodes are identical {episodeId}");
+            File.Move(preLocal,finalFile);
+            File.Delete(preRemote);
+            return (int)new FileInfo(finalFile).Length;
+        }
+        
         string ffmpegArgsL = $" -y -i '{preLocal}'  '{workingLocal}'";
         string ffmpegArgsR = $" -y -i {preRemote}  {workingRemote}";
         string ffmpegArgsFinal = $"-y -i {processedFile} {finalFile}";

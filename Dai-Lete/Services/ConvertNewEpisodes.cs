@@ -36,7 +36,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             _logger.LogInformation("Queued work in progress but service attempted to check for latest episodes");
             return;
         }
-        _logger.LogInformation("Checking Queue for processing episodes.");
+        _logger.LogDebug("Checking Queue for processing episodes.");
         _QueueLock = true;
         try
         {
@@ -61,7 +61,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             }
             _QueueLock = false;
             if(processedEps > 0){}
-            _logger.LogInformation($"Queue processed {processedEps} episodes");
+            _logger.LogDebug($"Queue processed {processedEps} episodes");
         }
         catch (Exception e)
         {

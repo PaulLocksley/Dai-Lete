@@ -25,7 +25,7 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "baseAddress":"127.0.0.1:7225",
-        "proxyAddress":"192.168.20.34"
+        "proxyAddress":"192.168.20.34:1080"
       }
     },
     "IIS Express": {

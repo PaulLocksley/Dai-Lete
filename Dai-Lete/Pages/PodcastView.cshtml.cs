@@ -26,6 +26,6 @@ public class PodcastView : PageModel
 
     public void Test(string pid)
     {
-        Console.WriteLine(pid);
+        // Method appears unused - consider removing
     }
 }

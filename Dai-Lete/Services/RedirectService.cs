@@ -7,10 +7,12 @@ namespace Dai_Lete.Services;
 public class RedirectService
 {
     private readonly ILogger<RedirectService> _logger;
+    private readonly IDatabaseService _databaseService;
 
-    public RedirectService(ILogger<RedirectService> logger)
+    public RedirectService(ILogger<RedirectService> logger, IDatabaseService databaseService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
     }
  
     
@@ -22,7 +24,7 @@ public class RedirectService
         try
         {
             const string sql = @"SELECT * FROM Redirects WHERE OriginalLink = @url";
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             return await connection.QueryFirstOrDefaultAsync<RedirectLink>(sql, new { url });
         }
         catch (Exception ex)
@@ -37,7 +39,7 @@ public class RedirectService
         try
         {
             const string sql = @"SELECT * FROM Redirects WHERE Id = @id";
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             var result = await connection.QueryFirstOrDefaultAsync<RedirectLink?>(sql, new { id = id.ToString().ToLowerInvariant() });
             
             if (!result.HasValue)
@@ -59,7 +61,7 @@ public class RedirectService
         try
         {
             const string sql = @"INSERT INTO Redirects (OriginalLink, Id) VALUES (@url, @id)";
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             var rows = await connection.ExecuteAsync(sql, new { url = link.OriginalLink, id = link.Id });
             
             if (rows != 1)

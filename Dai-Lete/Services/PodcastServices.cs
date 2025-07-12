@@ -9,11 +9,13 @@ public class PodcastServices
 {
     private readonly ILogger<PodcastServices> _logger;
     private readonly HttpClient _httpClient;
+    private readonly IDatabaseService _databaseService;
 
-    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient)
+    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         
         _httpClient.DefaultRequestHeaders.Add("User-Agent", 
             "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
@@ -25,7 +27,7 @@ public class PodcastServices
         try
         {
             const string sql = @"SELECT * FROM Podcasts";
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             var results = await connection.QueryAsync<Podcast>(sql);
             return results.ToList();
         }
@@ -41,7 +43,7 @@ public class PodcastServices
         try
         {
             const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
             
             if (podcast is null)

@@ -21,107 +21,198 @@ public class PodcastController : Controller
 {
     private readonly ConfigManager _configManager;
     private readonly PodcastServices _podcastServices;
+    private readonly IDatabaseService _databaseService;
     private readonly ILogger<PodcastController> _logger;
 
-    public PodcastController(ConfigManager configManager, PodcastServices podcastServices, ILogger<PodcastController> logger)
+    public PodcastController(ConfigManager configManager, PodcastServices podcastServices, IDatabaseService databaseService, ILogger<PodcastController> logger)
     {
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     [HttpPost("add")]
-    public IActionResult addPodcast(Uri inUri, string authToken)
+    public async Task<IActionResult> addPodcast(Uri inUri, string authToken)
     {
-        if (_configManager.GetAuthToken(inUri.ToString()) != authToken)
-        {
-            Console.WriteLine($"{authToken} did not match expected value");
-            return StatusCode(401);
-        }
-        var p = new Podcast(inUri);
-        //validate we can read the url as a feed.
         try
         {
-            using var reader = XmlReader.Create(p.InUri.ToString());
-            var RssFeed = new XmlDocument();
-            RssFeed.Load(reader);
+            if (_configManager.GetAuthToken(inUri.ToString()) != authToken)
+            {
+                _logger.LogWarning("Invalid auth token provided for podcast addition: {Uri}", inUri);
+                return Unauthorized("Invalid authentication token");
+            }
+
+            var p = new Podcast(inUri);
+            
+            // Validate we can read the URL as a feed
+            try
+            {
+                using var reader = XmlReader.Create(p.InUri.ToString());
+                var rssFeed = new XmlDocument();
+                rssFeed.Load(reader);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to parse RSS feed: {Uri}", p.InUri);
+                return BadRequest($"Failed to parse RSS feed: {p.InUri}");
+            }
+            
+            const string sql = @"INSERT INTO Podcasts (InUri, Id) VALUES (@InUri, @Id)";
+            _logger.LogInformation("Adding new podcast: {Uri} with ID: {Id}", p.InUri, p.Id);
+            
+            using var connection = await _databaseService.GetConnectionAsync();
+            var rows = await connection.ExecuteAsync(sql, new { InUri = p.InUri.ToString(), Id = p.Id });
+            
+            if (rows != 1)
+            {
+                _logger.LogWarning("Failed to insert podcast into database, possibly duplicate: {Uri} with ID: {Id}", p.InUri, p.Id);
+                return Conflict("Podcast with this ID may already exist");
+            }
+            
+            _ = FeedCache.UpdatePodcastCache(p.Id);
+            return Ok(p.Id);
         }
-        catch
+        catch (Exception ex)
         {
-            return StatusCode(400, $"Failed to parse {p.InUri}");
+            _logger.LogError(ex, "Unexpected error while adding podcast: {Uri}", inUri);
+            return Problem(
+                detail: "An internal server error occurred while adding podcast",
+                statusCode: 500,
+                title: "Internal Server Error");
         }
-        
-        
-        var sql = @"INSERT INTO Podcasts (inuri,id)  VALUES (@InUri,@Id)";
-        Console.WriteLine($"obj: {p.InUri.ToString()} ,{p.Id}");
-        var rows = SqLite.Connection().Execute(sql, new { InUri = p.InUri.ToString(), Id = p.Id });
-        if (rows != 1)
-        {
-            throw new DataException();
-        }
-        
-        _ = FeedCache.UpdatePodcastCache(p.Id);
-        return StatusCode(200,p.Id);
     }
     [HttpDelete("delete")]
-    public IActionResult deletePodcast(Guid id, string authToken)
+    public async Task<IActionResult> deletePodcast(Guid id, string authToken)
     {
-        if (_configManager.GetAuthToken(id.ToString()) != authToken)
+        try
         {
-            Console.WriteLine($"{authToken} did not match expected value");
-            return StatusCode(401);
+            if (_configManager.GetAuthToken(id.ToString()) != authToken)
+            {
+                _logger.LogWarning("Invalid auth token provided for podcast deletion: {PodcastId}", id);
+                return Unauthorized("Invalid authentication token");
+            }
+
+            _logger.LogInformation("Auth token accepted, deleting podcast {PodcastId}", id);
+            
+            const string sql = @"DELETE FROM Podcasts WHERE Id = @id";
+            const string episodeSql = @"SELECT Id FROM Episodes WHERE PodcastId = @pid";
+            
+            using var connection = await _databaseService.GetConnectionAsync();
+            var episodeIds = await connection.QueryAsync<string>(episodeSql, new { pid = id });
+            
+            foreach (var eId in episodeIds)
+            {
+                await DeletePodcastEpisode(id, eId);
+            }
+            
+            _logger.LogInformation("Deleting podcast {PodcastId}", id);
+            var rows = await connection.ExecuteAsync(sql, new { id = id });
+            
+            if (rows != 1)
+            {
+                _logger.LogWarning("Podcast not found for deletion: {PodcastId}", id);
+                return NotFound("Podcast not found");
+            }
+            
+            FeedCache.metaDataCache.Remove(id);
+            return Ok("Podcast deleted successfully");
         }
-        Console.WriteLine($"AuthToken accepted, deleting podcast {id}");
-        var sql = @"DELETE FROM Podcasts WHERE @id = Id";
-        var episodeSql = @"SELECT Id FROM Episodes where PodcastId=@pid";
-        var episodeIds = SqLite.Connection().Query<string>(episodeSql, new {pid = id});
-        foreach (var eId in episodeIds)
+        catch (Exception ex)
         {
-            DeletePodcastEpisode(id, eId);
+            _logger.LogError(ex, "Unexpected error while deleting podcast: {PodcastId}", id);
+            return Problem(
+                detail: "An internal server error occurred while deleting podcast",
+                statusCode: 500,
+                title: "Internal Server Error");
         }
-        Console.WriteLine($"Deleting podcast {id}");
-        var rows = SqLite.Connection().Execute(sql, new { id = id });
-        if (rows != 1)
-        {
-            throw new DataException();
-        }
-        FeedCache.metaDataCache.Remove(id);
-        return StatusCode(200);
     }
 
     [HttpPost("Queue")]
-    public string queueEpisode(string podcastInUri, string podcastGUID, string episodeUrl, string episodeGuid)
+    public IActionResult queueEpisode(string podcastInUri, string podcastGUID, string episodeUrl, string episodeGuid)
     {
-        //todo: changed 
-        if (Guid.TryParse(podcastGUID, out var  parsedPodcastGuid) && !FeedCache.feedCache.ContainsKey(parsedPodcastGuid))
+        if (string.IsNullOrWhiteSpace(podcastGUID) || !Guid.TryParse(podcastGUID, out var parsedPodcastGuid))
         {
-            throw new Exception("Error, could not parse podcast Guid or podcast not known to server.");
+            _logger.LogWarning("Invalid podcast GUID provided: {PodcastGUID}", podcastGUID);
+            return BadRequest("Invalid podcast GUID format");
         }
-        PodcastQueue.toProcessQueue.Enqueue((podcast: new Podcast(podcastGUID, podcastInUri), episodeUrl: episodeUrl, episodeGuid: episodeGuid));
-        return $"Episode added to queue. {PodcastQueue.toProcessQueue.Count} item/s in queue ";
+
+        if (!FeedCache.feedCache.ContainsKey(parsedPodcastGuid))
+        {
+            _logger.LogWarning("Podcast not found in cache: {PodcastId}", parsedPodcastGuid);
+            return NotFound("Podcast not known to server");
+        }
+
+        if (string.IsNullOrWhiteSpace(episodeUrl) || string.IsNullOrWhiteSpace(episodeGuid))
+        {
+            _logger.LogWarning("Missing required parameters for episode queue");
+            return BadRequest("Episode URL and GUID are required");
+        }
+
+        try
+        {
+            PodcastQueue.toProcessQueue.Enqueue((podcast: new Podcast(podcastGUID, podcastInUri), episodeUrl: episodeUrl, episodeGuid: episodeGuid));
+            var queueCount = PodcastQueue.toProcessQueue.Count;
+            _logger.LogInformation("Episode {EpisodeGuid} added to queue. Queue size: {QueueCount}", episodeGuid, queueCount);
+            return Ok($"Episode added to queue. {queueCount} item/s in queue");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to add episode {EpisodeGuid} to queue", episodeGuid);
+            return Problem(
+                detail: "An internal server error occurred while adding episode to queue",
+                statusCode: 500,
+                title: "Internal Server Error");
+        }
     }
 
     [HttpDelete("DeleteEpisode")]
-    public bool DeletePodcastEpisode(Guid podcastId, string episodeGuid)
+    public async Task<IActionResult> DeletePodcastEpisode(Guid podcastId, string episodeGuid)
     {
-        if(!FeedCache.feedCache.ContainsKey(podcastId))
+        if (string.IsNullOrWhiteSpace(episodeGuid))
         {
-            throw new Exception("Error, podcast not known to server.");
+            _logger.LogWarning("Episode GUID is required for deletion");
+            return BadRequest("Episode GUID is required");
         }
 
-        var sql = @"DELETE FROM Episodes WHERE id==@eid and podcastid==@pid";
-        var i = SqLite.Connection().Execute(sql, new { pid = podcastId, eid = episodeGuid });
-        if (i != 1)
+        if (!FeedCache.feedCache.ContainsKey(podcastId))
         {
-            throw new Exception("Error, you dun messed up...");
+            _logger.LogWarning("Podcast not found in cache: {PodcastId}", podcastId);
+            return NotFound("Podcast not known to server");
         }
-        var filepath = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{podcastId}{Path.DirectorySeparatorChar}{episodeGuid}.mp3";
-        if (!System.IO.File.Exists(filepath))
+
+        try
         {
-            throw new Exception("Could not find actual file.");
+            using var connection = await _databaseService.GetConnectionAsync();
+            const string sql = @"DELETE FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
+            var deletedRows = await connection.ExecuteAsync(sql, new { pid = podcastId, eid = episodeGuid });
+            
+            if (deletedRows != 1)
+            {
+                _logger.LogWarning("Episode not found in database: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+                return NotFound("Episode not found in database");
+            }
+
+            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.mp3");
+            if (System.IO.File.Exists(filepath))
+            {
+                System.IO.File.Delete(filepath);
+                _logger.LogInformation("Deleted episode file and database record: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+            }
+            else
+            {
+                _logger.LogWarning("Episode file not found but database record deleted: {FilePath}", filepath);
+            }
+
+            return Ok("Episode deleted successfully");
         }
-        System.IO.File.Delete(filepath);
-        Console.WriteLine($"Deleted episode {episodeGuid} of podcast {podcastId}");//todo:add logger to controller
-        return true;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete episode {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+            return Problem(
+                detail: "An internal server error occurred while deleting episode",
+                statusCode: 500,
+                title: "Internal Server Error");
+        }
     }
     
     [HttpGet("list-podcasts")]
@@ -134,14 +225,28 @@ public class PodcastController : Controller
 
     [HttpGet("podcast-feed")]
     [Produces("application/xml")]
-    public ContentResult getFeed(Guid id)
+    public async Task<IActionResult> getFeed(Guid id)
     {
-        if (!FeedCache.feedCache.ContainsKey(id))
+        try
         {
-            throw new Exception($"Failed to find podcast with key: {id}");
+            if (!FeedCache.feedCache.ContainsKey(id))
+            {
+                _logger.LogWarning("Podcast feed not found in cache: {PodcastId}", id);
+                return NotFound($"Podcast feed not found for ID: {id}");
+            }
+
+            var feedXml = FeedCache.feedCache[id].OuterXml;
+            _logger.LogDebug("Serving podcast feed for {PodcastId}", id);
+            return Content(feedXml, "application/xml");
         }
-        return Content(FeedCache.feedCache[id].OuterXml, "application/xml");
-        //return Content(XmlService.GenerateNewFeed(id).OuterXml, "application/xml");
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to retrieve podcast feed for {PodcastId}", id);
+            return Problem(
+                detail: "An internal server error occurred while retrieving podcast feed",
+                statusCode: 500,
+                title: "Internal Server Error");
+        }
     }
     
 }

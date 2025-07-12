@@ -7,7 +7,10 @@ using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+// Add configuration options
+builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
+builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
+
 // Add services to the container.
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -16,6 +19,7 @@ builder.Services.AddSwaggerGen();
 builder.WebHost.UseSentry();
 
 // Register services
+builder.Services.AddSingleton<IDatabaseService, DatabaseService>();
 builder.Services.AddScoped<ConfigManager>();
 builder.Services.AddScoped<PodcastServices>();
 builder.Services.AddScoped<RedirectService>();
@@ -40,6 +44,10 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+}
+else
+{
+    app.UseDeveloperExceptionPage();
 }
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -70,6 +78,11 @@ app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
+
+// Initialize database
+var databaseService = app.Services.GetRequiredService<IDatabaseService>();
+await databaseService.InitializeDatabaseAsync();
+SqLite.Initialize(databaseService);
 
 // Initialize FeedCache
 var feedCacheService = app.Services.GetRequiredService<FeedCacheService>();

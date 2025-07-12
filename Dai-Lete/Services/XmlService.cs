@@ -11,12 +11,14 @@ public class XmlService
     private readonly ILogger<XmlService> _logger;
     private readonly ConfigManager _configManager;
     private readonly RedirectService _redirectService;
+    private readonly IDatabaseService _databaseService;
 
-    public XmlService(ILogger<XmlService> logger, ConfigManager configManager, RedirectService redirectService)
+    public XmlService(ILogger<XmlService> logger, ConfigManager configManager, RedirectService redirectService, IDatabaseService databaseService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _redirectService = redirectService ?? throw new ArgumentNullException(nameof(redirectService));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
     }
 
     public async Task<XmlDocument> GenerateNewFeedAsync(Guid podcastId)
@@ -33,7 +35,7 @@ public class XmlService
             var processedEpisodes = new List<PodcastEpisodeMetadata>();
             var nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
 
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             
             const string podcastSql = @"SELECT * FROM Podcasts WHERE Id = @podcastId";
             var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(podcastSql, new { podcastId });

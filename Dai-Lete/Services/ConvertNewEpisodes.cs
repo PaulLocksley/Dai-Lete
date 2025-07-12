@@ -1,6 +1,7 @@
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dapper;
+using Microsoft.Extensions.Options;
 
 namespace Dai_Lete.Services;
 
@@ -8,14 +9,18 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
 {
     private readonly ILogger<ConvertNewEpisodes> _logger;
     private readonly PodcastServices _podcastServices;
+    private readonly PodcastOptions _options;
+    private readonly IDatabaseService _databaseService;
     private Timer? _timer;
     private Timer? _queueTimer;
     private bool _queueLock;
 
-    public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger, PodcastServices podcastServices)
+    public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger, PodcastServices podcastServices, IOptions<PodcastOptions> options, IDatabaseService databaseService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
+        _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
     }
     
     
@@ -23,8 +28,14 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     {
         _logger.LogInformation("Episode conversion service starting");
 
-        _timer = new Timer(CheckFeeds, null, TimeSpan.Zero, TimeSpan.FromHours(1));
-        _queueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, TimeSpan.FromSeconds(10));
+        var processingInterval = TimeSpan.FromHours(_options.ProcessingIntervalHours);
+        var queueCheckInterval = TimeSpan.FromSeconds(_options.QueueCheckIntervalSeconds);
+
+        _timer = new Timer(CheckFeeds, null, TimeSpan.Zero, processingInterval);
+        _queueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, queueCheckInterval);
+        
+        _logger.LogInformation("Timers configured - Processing: {ProcessingInterval}, Queue: {QueueInterval}", 
+            processingInterval, queueCheckInterval);
         
         return Task.CompletedTask;
     }
@@ -51,7 +62,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                     break;
                 }
 
-                using var connection = SqLite.Connection();
+                using var connection = await _databaseService.GetConnectionAsync();
                 const string sql = "SELECT Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
                 var existingEpisodes = await connection.QueryAsync<string>(sql,
                     new { pId = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
@@ -91,7 +102,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                 {
                     var latest = await _podcastServices.GetLatestEpisodeAsync(podcast.Id);
                     
-                    using var connection = SqLite.Connection();
+                    using var connection = await _databaseService.GetConnectionAsync();
                     const string sql = "SELECT Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
                     var existingEpisodes = await connection.QueryAsync<string>(sql, 
                         new { eid = latest.guid, pid = podcast.Id });
@@ -130,7 +141,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             await _podcastServices.DownloadEpisodeAsync(podcast, downloadLink, episodeGuid);
             var fileSize = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
             
-            using var connection = SqLite.Connection();
+            using var connection = await _databaseService.GetConnectionAsync();
             const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize) VALUES (@id, @pid, @fs)";
             await connection.ExecuteAsync(sql, new { id = episodeGuid, pid = podcast.Id, fs = fileSize });
             

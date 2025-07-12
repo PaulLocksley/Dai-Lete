@@ -1,7 +1,9 @@
 using System.Xml;
 using System.Diagnostics;
+using System.Net;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
+using Dai_Lete.Utilities;
 using Dapper;
 
 namespace Dai_Lete.Services;
@@ -12,12 +14,14 @@ public class PodcastServices
     private readonly HttpClient _httpClient;
     private readonly IDatabaseService _databaseService;
     private readonly PodcastMetricsService _metricsService;
-    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService, PodcastMetricsService metricsService)
+    private readonly ConfigManager _configManager;
+    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService, PodcastMetricsService metricsService, ConfigManager configManager)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
 
         _httpClient.DefaultRequestHeaders.Add("User-Agent",
             "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
@@ -103,17 +107,58 @@ public class PodcastServices
 
         try
         {
+            var remoteHttpClientHandler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"socks5://{_configManager.GetProxyAddress()}")
+            };
+            var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
+            var localHttpClient = new HttpClient();
+
+            localHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
+            remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1");
+
             var workingDirectory = Path.Combine(Path.GetTempPath(), podcast.Id.ToString());
             Directory.CreateDirectory(workingDirectory);
+            var destinationLocal = Path.Combine(workingDirectory, $"{episodeGuid}.local");
+            var destinationRemote = Path.Combine(workingDirectory, $"{episodeGuid}.remote");
 
-            var destinationPath = Path.Combine(workingDirectory, $"{episodeGuid}.local");
+            _logger.LogInformation("Starting dual download for episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
 
-            _logger.LogInformation("Starting download for episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
+            var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
+            {
+                _logger.LogInformation("local download started");
+                if (task.IsFaulted)
+                {
+                    _logger.LogError(task.Exception, "Local download failed");
+                    throw task.Exception ?? new Exception("Local download failed");
+                }
+                File.WriteAllBytes(destinationLocal, task.Result);
+            });
 
-            var episodeData = await _httpClient.GetByteArrayAsync(episodeUrl);
-            await File.WriteAllBytesAsync(destinationPath, episodeData);
+            var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
+            {
+                _logger.LogInformation("remote download started");
+                if (task.IsFaulted)
+                {
+                    _logger.LogError("remote download failed: {AggregateException}", task.Exception);
+                    throw task.Exception ?? new Exception("Remote download failed");
+                }
+                File.WriteAllBytes(destinationRemote, task.Result);
+            });
 
-            _logger.LogInformation("Successfully downloaded episode {EpisodeGuid}", episodeGuid);
+            await d1;
+            await d2;
+
+            if (d1.Status != TaskStatus.RanToCompletion || d2.Status != TaskStatus.RanToCompletion)
+            {
+                throw new Exception($"{d1.Exception} \n {d2.Exception}");
+            }
+
+            _logger.LogInformation("Successfully downloaded episode {EpisodeGuid} via both local and remote connections", episodeGuid);
+
+            localHttpClient.Dispose();
+            remoteHttpClient.Dispose();
+            remoteHttpClientHandler.Dispose();
         }
         catch (Exception ex)
         {
@@ -131,7 +176,8 @@ public class PodcastServices
         {
             _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
 
-            var originalFilePath = Path.Combine(Path.GetTempPath(), podcastId.ToString(), $"{episodeId}.local");
+            var workingDirectory = Path.Combine(Path.GetTempPath(), podcastId.ToString());
+            var originalFilePath = Path.Combine(workingDirectory, $"{episodeId}.local");
             if (!File.Exists(originalFilePath))
             {
                 _logger.LogWarning("Original audio file not found for episode {EpisodeId}: {FilePath}", episodeId, originalFilePath);
@@ -141,28 +187,123 @@ public class PodcastServices
             var originalDuration = await GetAudioDurationAsync(originalFilePath);
             _logger.LogDebug("Original episode duration: {Duration} for {EpisodeId}", originalDuration, episodeId);
 
-            await Task.Delay(5000);
+            _logger.LogInformation($"Starting to process {episodeId}");
 
-            var processedFilePath = GetEpisodeFilePath(podcastId, episodeId);
-            var processedFile = processedFilePath;
+            var preLocal = Path.Combine(workingDirectory, $"{episodeId}.local");
+            var workingLocal = $"{preLocal}.wav";
+            var preRemote = Path.Combine(workingDirectory, $"{episodeId}.remote");
+            var workingRemote = $"{preRemote}.wav";
+            var processedFile = Path.Combine(workingDirectory, $"{episodeId}processed.wav");
 
-            if (File.Exists(processedFile))
+            var finalFolder = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString());
+            var finalFile = Path.Combine(finalFolder, $"{episodeId}.mp3");
+
+            if (!Directory.Exists(finalFolder))
             {
-                var processedDuration = await GetAudioDurationAsync(processedFile);
-                var timeSaved = originalDuration - processedDuration;
-
-                _logger.LogDebug("Processed episode duration: {Duration} for {EpisodeId}", processedDuration, episodeId);
-                _logger.LogInformation("Time saved: {TimeSaved} for episode {EpisodeId}", timeSaved, episodeId);
-
-                var podcastName = await GetPodcastNameAsync(podcastId);
-                _metricsService.RecordTimeSaved(podcastId, episodeId, timeSaved, podcastName);
+                DirectoryInfo di = Directory.CreateDirectory(finalFolder);
             }
 
-            var fileInfo = new FileInfo(processedFile);
-            _logger.LogInformation("Completed processing episode {EpisodeId}", episodeId);
+            if (!File.Exists(preRemote))
+            {
+                _logger.LogError("Remote audio file not found for episode {EpisodeId}: {FilePath}", episodeId, preRemote);
+                throw new FileNotFoundException($"Remote audio file not found: {preRemote}");
+            }
 
-            return (int)fileInfo.Length;
+            if (FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
+            {
+                _logger.LogWarning($"Episodes are identical {episodeId}");
+                File.Move(preLocal, finalFile);
+                File.Delete(preRemote);
+                return (int)new FileInfo(finalFile).Length;
+            }
+
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" \"{workingRemote}\"";
+            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" \"{finalFile}\"";
+
+
+        Process process = new Process();
+        process.StartInfo.FileName = "ffmpeg";
+        process.StartInfo.Arguments = ffmpegArgsL;
+        process.EnableRaisingEvents = false;
+        process.Start();
+        while (!process.HasExited)
+        {
+            Thread.Sleep(100);
         }
+
+        process.StartInfo.Arguments = ffmpegArgsR;
+        process.Start();
+        while (!process.HasExited)
+        {
+            Thread.Sleep(100);
+        }
+
+        process.Kill();
+        var workingL = File.OpenRead(workingLocal);
+        var workingR = File.OpenRead(workingRemote);
+        var workingLLength = new FileInfo(workingLocal).Length;
+        var workingRLength = new FileInfo(workingRemote).Length;
+        var outStream = File.Create(processedFile);
+
+        var oneP = 1024; //read hopefully all meta data and file headers. 
+
+
+        var twoP = oneP;
+        workingR.Seek(oneP, SeekOrigin.Begin);
+        var byteWindow = 120000;
+
+        var headers = new byte[oneP];
+        workingL.Read(headers, 0, oneP);
+        outStream.Write(headers);
+
+        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+        {
+            var bufferL = new byte[byteWindow];
+            var bufferR = new byte[byteWindow];
+            var initialR = workingR.Position;
+            workingL.Read(bufferL, 0, byteWindow);
+            workingR.Read(bufferR, 0, byteWindow);
+
+
+            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
+            {
+                outStream.Write(bufferL);
+                continue;
+            }
+
+            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
+            {
+                workingR.Seek(i, SeekOrigin.Begin);
+                workingR.Read(bufferR, 0, byteWindow);
+                if (bufferL.SequenceEqual(bufferR))
+                {
+                    outStream.Write(bufferL);
+                    break;
+                }
+            }
+
+            workingR.Seek(initialR, SeekOrigin.Begin);
+        }
+        outStream.Close();
+        workingL.Close();
+        workingR.Close();
+        //one more process :) 
+
+        process.StartInfo.Arguments = ffmpegArgsFinal;
+        process.Start();
+        while (!process.HasExited) { Thread.Sleep(100); }
+        process.Kill();
+
+        File.Delete(preLocal);
+        File.Delete(workingLocal);
+        File.Delete(preRemote);
+        File.Delete(workingRemote);
+        File.Delete(processedFile);
+        _logger.LogInformation($"Completed processing {episodeId}");
+
+
+        return (int)new FileInfo(finalFile).Length;        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
@@ -172,8 +313,8 @@ public class PodcastServices
 
     private string GetEpisodeFilePath(Guid podcastId, string episodeId)
     {
-        var baseDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "episodes");
-        return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.wav");
+        var baseDir = _configManager.GetPodcastStoragePath();
+        return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.mp3");
     }
 
     private async Task<TimeSpan> GetAudioDurationAsync(string filePath)

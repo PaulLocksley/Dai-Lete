@@ -52,6 +52,34 @@ public class ConfigManager
             return "password";
         }
     }
+
+    public string GetProxyAddress()
+    {
+        try
+        {
+            var proxyAddress = _configuration["ProxyAddress"] ?? Environment.GetEnvironmentVariable("proxyAddress");
+            return proxyAddress ?? throw new InvalidOperationException("Proxy address not configured");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get proxy address");
+            throw;
+        }
+    }
+
+    public string GetPodcastStoragePath()
+    {
+        try
+        {
+            var storagePath = _configuration["PodcastStoragePath"] ?? Environment.GetEnvironmentVariable("podcastStoragePath");
+            return storagePath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get podcast storage path, using default");
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts");
+        }
+    }
 }
 
 

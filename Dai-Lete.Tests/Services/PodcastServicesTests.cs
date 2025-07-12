@@ -1,6 +1,7 @@
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
 
@@ -11,11 +12,21 @@ public class PodcastServicesTests
     private readonly Mock<ILogger<PodcastServices>> _mockLogger;
     private readonly Mock<HttpClient> _mockHttpClient;
     private readonly Mock<IDatabaseService> _mockDatabaseService;
+    private readonly PodcastMetricsService _metricsService;
+    private readonly ConfigManager _configManager;
     public PodcastServicesTests()
     {
         _mockLogger = new Mock<ILogger<PodcastServices>>();
         _mockHttpClient = new Mock<HttpClient>();
         _mockDatabaseService = new Mock<IDatabaseService>();
+        
+        var mockMetricsLogger = new Mock<ILogger<PodcastMetricsService>>();
+        _metricsService = new PodcastMetricsService(mockMetricsLogger.Object);
+        
+        var mockConfigLogger = new Mock<ILogger<ConfigManager>>();
+        var mockConfiguration = new Mock<IConfiguration>();
+        mockConfiguration.Setup(c => c["ProxyAddress"]).Returns("127.0.0.1:1080");
+        _configManager = new ConfigManager(mockConfigLogger.Object, mockConfiguration.Object);
     }
 
     [Fact]
@@ -26,7 +37,9 @@ public class PodcastServicesTests
         var service = new PodcastServices(
             _mockLogger.Object,
             httpClient,
-            _mockDatabaseService.Object);
+            _mockDatabaseService.Object,
+            _metricsService,
+            _configManager);
 
         Assert.NotNull(service);
     }
@@ -42,7 +55,9 @@ public class PodcastServicesTests
         var service = new PodcastServices(
             _mockLogger.Object,
             httpClient,
-            _mockDatabaseService.Object);
+            _mockDatabaseService.Object,
+            _metricsService,
+            _configManager);
 
         await Assert.ThrowsAsync<ArgumentException>(() =>
             service.ProcessDownloadedEpisodeAsync(Guid.NewGuid(), episodeId));
@@ -55,7 +70,9 @@ public class PodcastServicesTests
         var service = new PodcastServices(
             _mockLogger.Object,
             httpClient,
-            _mockDatabaseService.Object);
+            _mockDatabaseService.Object,
+            _metricsService,
+            _configManager);
 
         var podcastId = Guid.NewGuid();
         var episodeId = "test-episode";

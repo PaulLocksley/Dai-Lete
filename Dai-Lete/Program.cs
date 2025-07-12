@@ -15,11 +15,19 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.WebHost.UseSentry();
 
+// Register services
+builder.Services.AddScoped<ConfigManager>();
+builder.Services.AddScoped<PodcastServices>();
+builder.Services.AddScoped<RedirectService>();
+builder.Services.AddScoped<XmlService>();
+builder.Services.AddSingleton<FeedCacheService>();
 builder.Services.AddHostedService<ConvertNewEpisodes>();
+
 builder.Services.AddRazorPages();
 builder.Services.AddMvc()
     .AddMvcOptions(o => o.OutputFormatters.Add(new XmlDataContractSerializerOutputFormatter()));
-//Add http client for redirects.
+
+// Add http client for redirects
 builder.Services.AddHttpClient();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<RedirectCache>();
@@ -63,6 +71,9 @@ app.UseAuthorization();
 app.MapRazorPages();
 app.MapControllers();
 
-FeedCache.buildCache();
+// Initialize FeedCache
+var feedCacheService = app.Services.GetRequiredService<FeedCacheService>();
+FeedCache.Initialize(feedCacheService);
+await FeedCache.buildCache();
 
 app.Run();

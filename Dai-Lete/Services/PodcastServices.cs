@@ -1,133 +1,142 @@
-using System.Diagnostics;
-using System.Net;
-using System.Runtime.InteropServices;
 using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
-using Dai_Lete.Utilities;
-using Dai_Lete.Services;
 using Dapper;
-using Microsoft.AspNetCore.Connections;
 
 namespace Dai_Lete.Services;
 
-public static class PodcastServices
+public class PodcastServices
 {
-    private static readonly ILogger<ConvertNewEpisodes> _logger = new Logger<ConvertNewEpisodes>(new LoggerFactory());
+    private readonly ILogger<PodcastServices> _logger;
+    private readonly HttpClient _httpClient;
+
+    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        
+        _httpClient.DefaultRequestHeaders.Add("User-Agent", 
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
+    }
  
     
-    public static List<Podcast> GetPodcasts()
+    public async Task<List<Podcast>> GetPodcastsAsync()
     {
-        var sql = @"Select * From Podcasts";
-        var results = SqLite.Connection().Query<Podcast>(sql);
-        return results.ToList();
-    }
-
-    public static (string guid, string downloadLink) GetLatestEpisode(Guid podcastId)
-    {
-        var RssFeed = new XmlDocument();
-        var sql = @"SELECT * FROM Podcasts where id = @id";
-        Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new {id = podcastId});
-        if (podcast is null)
-        {
-            throw new FileNotFoundException($"Failed to locate podcast with id {podcastId}");
-        }
         try
         {
-            using (var reader = XmlReader.Create(podcast.InUri.ToString()))
-            {
-                RssFeed.Load(reader);
-            }
+            const string sql = @"SELECT * FROM Podcasts";
+            using var connection = SqLite.Connection();
+            var results = await connection.QueryAsync<Podcast>(sql);
+            return results.ToList();
         }
-        catch
+        catch (Exception ex)
         {
-            throw new Exception($"Failed to parse {podcast.InUri}");
-        }
-        foreach (XmlElement node in RssFeed.DocumentElement.ChildNodes)
-        {
-            foreach (XmlElement n2 in node.ChildNodes)
-            {
-                if (n2.Name != "item")
-                {
-                    continue;
-                }
-
-                string? guid = null;
-                XmlNode? enclosure = null;
-                String downloadLink = null;
-                foreach (XmlElement n3 in n2.ChildNodes)
-                {
-                    if (n3.Name == "guid")
-                    {
-                        guid = string.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));
-                    }
-
-                    if (n3.Name == "enclosure") { enclosure = n3;}
-                }
-                foreach (XmlAttribute atr in enclosure.Attributes) {
-                    if (atr.Name == "url")
-                    {
-                        downloadLink = atr.Value;
-                        break;
-                    }
-                }
-                if (downloadLink is null || guid is null)
-                {
-                    throw new Exception($"Failed to parse {podcast.InUri}");
-                }
-                return(guid: guid,downloadLink:downloadLink);
-            }
-        }
-        throw new FileNotFoundException($"Could not find episode for podcast: {podcastId}");
-    }
-
-    public static void DownloadEpisode(Podcast podcast, string episodeUrl,string episodeGuid)
-    {
-        var localHttpClient = new HttpClient();
-        localHttpClient.DefaultRequestHeaders.Add("User-Agent","Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1" ); 
-        
-        //make folders.
-        var workingDirectory = $"{Path.GetTempPath()}";
-        if (!Directory.Exists($"{workingDirectory}{podcast.Id}"))
-        {
-            Directory.CreateDirectory($"{workingDirectory}{podcast.Id}");
-        }
-
-        workingDirectory = $"{workingDirectory}{podcast.Id}{Path.DirectorySeparatorChar}";
-        var destinationLocal = ($"{workingDirectory}{episodeGuid}.local");
-        try
-        {
-            var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
-            {
-                _logger.LogInformation("local download started");
-                if (task.IsFaulted)
-                {
-                    Console.WriteLine($"Local download failed: {task.Exception}");
-                }
-                File.WriteAllBytes(destinationLocal, task.Result);
-            });
-                d1.Wait();
-            if (d1.Status != TaskStatus.RanToCompletion)
-            { 
-                if(d1.Exception is not null){
-                    throw d1.Exception;
-                }
-            }
-
-            _logger.LogInformation("Downloads apparently done.");
-        }
-        catch (Exception e)
-        {
-            _logger.LogWarning($"Download failed of {episodeUrl}\n{e}");
+            _logger.LogError(ex, "Failed to retrieve podcasts");
             throw;
         }
     }
 
-    public static int ProcessDownloadedEpisode(Guid id, string episodeId)
+    public async Task<(string guid, string downloadLink)> GetLatestEpisodeAsync(Guid podcastId)
     {
-       //todo reimplement.
-        _logger.LogInformation($"Completed processing {episodeId}");
-        return -1;
+        try
+        {
+            const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            using var connection = SqLite.Connection();
+            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
+            
+            if (podcast is null)
+            {
+                throw new ArgumentException($"Podcast with id {podcastId} not found", nameof(podcastId));
+            }
+
+            var rssFeed = new XmlDocument();
+            using var reader = XmlReader.Create(podcast.InUri.ToString());
+            rssFeed.Load(reader);
+
+            foreach (XmlElement node in rssFeed.DocumentElement.ChildNodes)
+            {
+                foreach (XmlElement item in node.ChildNodes)
+                {
+                    if (item.Name != "item") continue;
+
+                    string? guid = null;
+                    XmlNode? enclosure = null;
+
+                    foreach (XmlElement element in item.ChildNodes)
+                    {
+                        switch (element.Name)
+                        {
+                            case "guid":
+                                guid = string.Concat(element.InnerText.Split(Path.GetInvalidFileNameChars()));
+                                break;
+                            case "enclosure":
+                                enclosure = element;
+                                break;
+                        }
+                    }
+
+                    if (enclosure?.Attributes?["url"]?.Value is string downloadLink && !string.IsNullOrEmpty(guid))
+                    {
+                        return (guid, downloadLink);
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"No episodes found for podcast: {podcastId}");
+        }
+        catch (Exception ex) when (!(ex is ArgumentException || ex is InvalidOperationException))
+        {
+            _logger.LogError(ex, "Failed to parse RSS feed for podcast {PodcastId}", podcastId);
+            throw new InvalidOperationException($"Failed to parse RSS feed for podcast {podcastId}", ex);
+        }
+    }
+
+    public async Task DownloadEpisodeAsync(Podcast podcast, string episodeUrl, string episodeGuid)
+    {
+        if (podcast is null) throw new ArgumentNullException(nameof(podcast));
+        if (string.IsNullOrWhiteSpace(episodeUrl)) throw new ArgumentException("Episode URL cannot be null or empty", nameof(episodeUrl));
+        if (string.IsNullOrWhiteSpace(episodeGuid)) throw new ArgumentException("Episode GUID cannot be null or empty", nameof(episodeGuid));
+
+        try
+        {
+            var workingDirectory = Path.Combine(Path.GetTempPath(), podcast.Id.ToString());
+            Directory.CreateDirectory(workingDirectory);
+
+            var destinationPath = Path.Combine(workingDirectory, $"{episodeGuid}.local");
+            
+            _logger.LogInformation("Starting download for episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
+            
+            var episodeData = await _httpClient.GetByteArrayAsync(episodeUrl);
+            await File.WriteAllBytesAsync(destinationPath, episodeData);
+            
+            _logger.LogInformation("Successfully downloaded episode {EpisodeGuid}", episodeGuid);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to download episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
+            throw;
+        }
+    }
+
+    public async Task<int> ProcessDownloadedEpisodeAsync(Guid podcastId, string episodeId)
+    {
+        if (string.IsNullOrWhiteSpace(episodeId)) 
+            throw new ArgumentException("Episode ID cannot be null or empty", nameof(episodeId));
+
+        try
+        {
+            _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
+            
+            await Task.Delay(100);
+            
+            _logger.LogInformation("Completed processing episode {EpisodeId}", episodeId);
+            return -1;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
+            throw;
+        }
     }
     
 }

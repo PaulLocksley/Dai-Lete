@@ -1,0 +1,13 @@
+{
+    "python.testing.pytestArgs": [
+        "src/tests/",
+        "-n",
+        "auto"
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "cSpell.words": [
+        "SOCIAL"
+    ],
+    "python.envFile": "${workspaceFolder}/.vscode/.env"
+}

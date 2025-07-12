@@ -14,14 +14,25 @@ using Dai_Lete.Services;
 using Dapper;
 
 namespace Dai_Lete.Controllers;
+
 [ApiController]
 [Route("[controller]")]
 public class PodcastController : Controller
 {
+    private readonly ConfigManager _configManager;
+    private readonly PodcastServices _podcastServices;
+    private readonly ILogger<PodcastController> _logger;
+
+    public PodcastController(ConfigManager configManager, PodcastServices podcastServices, ILogger<PodcastController> logger)
+    {
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+        _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
     [HttpPost("add")]
     public IActionResult addPodcast(Uri inUri, string authToken)
     {
-        if (ConfigManager.GetAuthToken(inUri.ToString()) != authToken)
+        if (_configManager.GetAuthToken(inUri.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);
@@ -54,7 +65,7 @@ public class PodcastController : Controller
     [HttpDelete("delete")]
     public IActionResult deletePodcast(Guid id, string authToken)
     {
-        if (ConfigManager.GetAuthToken(id.ToString()) != authToken)
+        if (_configManager.GetAuthToken(id.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);
@@ -85,7 +96,7 @@ public class PodcastController : Controller
         {
             throw new Exception("Error, could not parse podcast Guid or podcast not known to server.");
         }
-        PodcastQueue.toProcessQueue.Enqueue((Podcast:new Podcast(podcastGUID,podcastInUri))),episodeUrl: episodeUrl,episodeGuid: episodeGuid));
+        PodcastQueue.toProcessQueue.Enqueue((podcast: new Podcast(podcastGUID, podcastInUri), episodeUrl: episodeUrl, episodeGuid: episodeGuid));
         return $"Episode added to queue. {PodcastQueue.toProcessQueue.Count} item/s in queue ";
     }
 
@@ -115,9 +126,10 @@ public class PodcastController : Controller
     
     [HttpGet("list-podcasts")]
     [Produces("application/json", "application/xml")]
-    public IActionResult listPodcasts()
+    public async Task<IActionResult> listPodcasts()
     {
-        return Ok(PodcastServices.GetPodcasts().Select(x => x.ToString())); //todo: Work out how to setup default serialization because this is stupid.
+        var podcasts = await _podcastServices.GetPodcastsAsync();
+        return Ok(podcasts.Select(x => x.ToString()));
     }
 
     [HttpGet("podcast-feed")]

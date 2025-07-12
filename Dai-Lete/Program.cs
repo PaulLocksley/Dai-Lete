@@ -1,6 +1,7 @@
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.FileProviders;
@@ -11,6 +12,21 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
 
+// Add authentication
+builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
+    .AddCookie(options =>
+    {
+        options.LoginPath = "/Auth/Login";
+        options.LogoutPath = "/Auth/Logout";
+        options.AccessDeniedPath = "/Auth/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(7);
+        options.SlidingExpiration = true;
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        options.Cookie.SameSite = SameSiteMode.Strict;
+        options.Cookie.Name = "DaiLete.Auth";
+    });
+
 // Add services to the container.
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -20,15 +36,19 @@ builder.WebHost.UseSentry();
 
 // Register services
 builder.Services.AddSingleton<IDatabaseService, DatabaseService>();
-builder.Services.AddScoped<ConfigManager>();
-builder.Services.AddScoped<WhisperTranscriptionService>();
-builder.Services.AddScoped<PodcastServices>();
-builder.Services.AddScoped<RedirectService>();
-builder.Services.AddScoped<XmlService>();
+builder.Services.AddSingleton<ConfigManager>();
+builder.Services.AddSingleton<WhisperTranscriptionService>();
+builder.Services.AddSingleton<PodcastServices>();
+builder.Services.AddSingleton<RedirectService>();
+builder.Services.AddSingleton<XmlService>();
 builder.Services.AddSingleton<FeedCacheService>();
 builder.Services.AddHostedService<ConvertNewEpisodes>();
 
-builder.Services.AddRazorPages();
+builder.Services.AddRazorPages(options =>
+{
+    options.Conventions.AuthorizeFolder("/");
+    options.Conventions.AllowAnonymousToPage("/Auth/Login");
+});
 builder.Services.AddMvc()
     .AddMvcOptions(o => o.OutputFormatters.Add(new XmlDataContractSerializerOutputFormatter()));
 
@@ -75,6 +95,7 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseRouting();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();

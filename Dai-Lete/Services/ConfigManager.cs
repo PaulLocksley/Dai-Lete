@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+
 
 namespace Dai_Lete.Services;
 
@@ -28,23 +27,29 @@ public class ConfigManager
         }
     }
 
-    public string GetAuthToken(string salt)
+    public string GetUsername()
     {
-        if (string.IsNullOrWhiteSpace(salt))
-            throw new ArgumentException("Salt cannot be null or empty", nameof(salt));
-
         try
         {
-            var accessToken = _configuration["AccessToken"] ?? Environment.GetEnvironmentVariable("accessToken");
-            var tokenValue = accessToken ?? "1234";
-
-            var hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes($"{salt}:{tokenValue}"));
-            return Convert.ToHexString(hashBytes).ToLowerInvariant();
+            return _configuration["Auth:Username"] ?? Environment.GetEnvironmentVariable("AUTH_USERNAME") ?? "admin";
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to generate auth token for salt: {Salt}", salt);
-            throw;
+            _logger.LogError(ex, "Failed to get username");
+            return "admin";
+        }
+    }
+
+    public string GetPassword()
+    {
+        try
+        {
+            return _configuration["Auth:Password"] ?? Environment.GetEnvironmentVariable("AUTH_PASSWORD") ?? "password";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get password");
+            return "password";
         }
     }
 }

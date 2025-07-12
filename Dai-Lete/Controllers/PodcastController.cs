@@ -4,6 +4,7 @@ using System.Net;
 using System.Runtime.Intrinsics.Arm;
 using System.Security.Authentication;
 using System.Security.Cryptography;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.ServiceModel.Syndication;
 using System.Text;
@@ -17,31 +18,24 @@ namespace Dai_Lete.Controllers;
 
 [ApiController]
 [Route("[controller]")]
+[Authorize]
 public class PodcastController : Controller
 {
-    private readonly ConfigManager _configManager;
     private readonly PodcastServices _podcastServices;
     private readonly IDatabaseService _databaseService;
     private readonly ILogger<PodcastController> _logger;
 
-    public PodcastController(ConfigManager configManager, PodcastServices podcastServices, IDatabaseService databaseService, ILogger<PodcastController> logger)
+    public PodcastController(PodcastServices podcastServices, IDatabaseService databaseService, ILogger<PodcastController> logger)
     {
-        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     [HttpPost("add")]
-    public async Task<IActionResult> addPodcast(Uri inUri, string authToken)
+    public async Task<IActionResult> addPodcast(Uri inUri)
     {
         try
         {
-            if (_configManager.GetAuthToken(inUri.ToString()) != authToken)
-            {
-                _logger.LogWarning("Invalid auth token provided for podcast addition: {Uri}", inUri);
-                return Unauthorized("Invalid authentication token");
-            }
-
             var p = new Podcast(inUri);
             
             // Validate we can read the URL as a feed
@@ -82,17 +76,11 @@ public class PodcastController : Controller
         }
     }
     [HttpDelete("delete")]
-    public async Task<IActionResult> deletePodcast(Guid id, string authToken)
+    public async Task<IActionResult> deletePodcast(Guid id)
     {
         try
         {
-            if (_configManager.GetAuthToken(id.ToString()) != authToken)
-            {
-                _logger.LogWarning("Invalid auth token provided for podcast deletion: {PodcastId}", id);
-                return Unauthorized("Invalid authentication token");
-            }
-
-            _logger.LogInformation("Auth token accepted, deleting podcast {PodcastId}", id);
+            _logger.LogInformation("Deleting podcast {PodcastId}", id);
             
             const string sql = @"DELETE FROM Podcasts WHERE Id = @id";
             const string episodeSql = @"SELECT Id FROM Episodes WHERE PodcastId = @pid";
@@ -225,6 +213,7 @@ public class PodcastController : Controller
 
     [HttpGet("podcast-feed")]
     [Produces("application/xml")]
+    [AllowAnonymous]
     public async Task<IActionResult> getFeed(Guid id)
     {
         try

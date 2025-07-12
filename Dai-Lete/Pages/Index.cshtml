@@ -13,18 +13,10 @@ function copyRssFeed(ID) {
      alert("Podcast Feed: "+url+"\nCopied to Clipboard")
 }
 async function  deleteEpsiode(ID) {
-    let password = prompt("Please enter password to delete podcast", "12345");
-    if (password == null || password == "") {
-      return;
-    } 
-    const msgBuffer = new TextEncoder().encode(ID+":"+password);
-    const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-
-    const hash = hashArray
-        .map((item) => item.toString(16).padStart(2, "0"))
-        .join("");
-    const resp = await fetch(window.location.origin+"/Podcast/delete?id="+ID+"&authToken="+hash, { method: 'DELETE' })
+    if (!confirm("Are you sure you want to delete this podcast?")) {
+        return;
+    }
+    const resp = await fetch(window.location.origin+"/Podcast/delete?id="+ID, { method: 'DELETE' })
     if(resp.status != 200){
         alert("Failed to delete podcast! response code:" + resp.status)
         return
@@ -33,7 +25,6 @@ async function  deleteEpsiode(ID) {
 }
 async function addPodcast(){
     var link = document.getElementById("inputUri").value
-    var password = document.getElementById("inputPassword").value
     try {
         url = new URL(link);
     } catch (_) {
@@ -41,22 +32,15 @@ async function addPodcast(){
         return
     }
 
-    const msgBuffer = new TextEncoder().encode(link+":"+password);
-    const hashBuffer = await window.crypto.subtle.digest("SHA-256", msgBuffer);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hash = hashArray
-            .map((item) => item.toString(16).padStart(2, "0"))
-            .join("");
-        const resp = await fetch(window.location.origin+"/Podcast/add?inUri="+link+"&authToken="+hash, { method: 'POST' })
-        if(resp.status != 200){
-            let body = await resp.text()
-            alert("Failed to add podcast! response code:" + resp.status + " " + body)
-            return
-        }
-        alert("Podcast added, it may take up to 1 hour for episode to process")
-        document.getElementById("inputUri").value = ""
-        document.getElementById("inputPassword").value = ""
+    const resp = await fetch(window.location.origin+"/Podcast/add?inUri="+link, { method: 'POST' })
+    if(resp.status != 200){
+        let body = await resp.text()
+        alert("Failed to add podcast! response code:" + resp.status + " " + body)
+        return
     }
+    alert("Podcast added, it may take up to 1 hour for episode to process")
+    document.getElementById("inputUri").value = ""
+}
 
 </script>
 <div class="text-center">
@@ -70,7 +54,6 @@ async function addPodcast(){
     <div class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded vstack"
          style="width: 19%; min-width: 200px">
         <h3>Podcast URI: </h3><input type="text" id="inputUri" name="inputUri">
-        <h3> Password: </h3><input type="password" id="inputPassword" name="inputPassword">
         <br/>
         <button class="btn-primary rounded" onclick="addPodcast()">Add Podcast</button>
     </div>

@@ -11,16 +11,16 @@ public static class TranscriptAccuracyHelper
 
         var lines = File.ReadAllLines(filePath);
         var segments = new List<ExpectedTranscriptSegment>();
-        
+
         for (int i = 0; i < lines.Length; i += 2)
         {
             if (i + 1 >= lines.Length) break;
-            
+
             var text = lines[i].Trim();
             var timestampLine = lines[i + 1].Trim();
-            
+
             if (string.IsNullOrEmpty(text) || text.StartsWith("[")) continue;
-            
+
             if (TimeSpan.TryParse($"00:{timestampLine}", out var timestamp))
             {
                 segments.Add(new ExpectedTranscriptSegment
@@ -43,18 +43,18 @@ public static class TranscriptAccuracyHelper
     {
         var expectedWords = NormalizeText(expected).Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var actualWords = NormalizeText(actual).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
+
         var matchingWords = 0;
         var totalWords = Math.Max(expectedWords.Length, actualWords.Length);
-        
+
         if (totalWords == 0) return 1.0;
-        
+
         // Simple word matching - could be enhanced with edit distance
         var expectedSet = new HashSet<string>(expectedWords);
         var actualSet = new HashSet<string>(actualWords);
-        
+
         matchingWords = expectedSet.Intersect(actualSet).Count();
-        
+
         return (double)matchingWords / totalWords;
     }
 
@@ -62,19 +62,19 @@ public static class TranscriptAccuracyHelper
     {
         var normalizedExpected = NormalizeText(expected);
         var normalizedActual = NormalizeText(actual);
-        
+
         var distance = LevenshteinDistance(normalizedExpected, normalizedActual);
         var maxLength = Math.Max(normalizedExpected.Length, normalizedActual.Length);
-        
+
         if (maxLength == 0) return 1.0;
-        
+
         return 1.0 - ((double)distance / maxLength);
     }
 
     private static string NormalizeText(string text)
     {
         if (string.IsNullOrEmpty(text)) return string.Empty;
-        
+
         // Convert to lowercase, remove extra whitespace and punctuation
         text = text.ToLowerInvariant();
         text = Regex.Replace(text, @"[^\w\s]", "");

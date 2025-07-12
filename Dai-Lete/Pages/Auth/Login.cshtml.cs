@@ -41,7 +41,7 @@ public class LoginModel : PageModel
     {
         var clientIp = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var rateLimitKey = $"login_attempts_{clientIp}";
-        
+
         if (_cache.TryGetValue(rateLimitKey, out int attempts) && attempts >= 5)
         {
             _logger.LogWarning("Rate limit exceeded for IP: {ClientIp}", clientIp);
@@ -68,7 +68,7 @@ public class LoginModel : PageModel
                 ExpiresUtc = DateTimeOffset.UtcNow.AddDays(7)
             };
 
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, 
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme,
                 new ClaimsPrincipal(claimsIdentity), authProperties);
 
             _logger.LogInformation("User {Username} logged in successfully", Username);
@@ -83,8 +83,8 @@ public class LoginModel : PageModel
 
         var newAttempts = attempts + 1;
         _cache.Set(rateLimitKey, newAttempts, TimeSpan.FromMinutes(15));
-        
-        _logger.LogWarning("Failed login attempt for username: {Username} from IP: {ClientIp} (attempt {Attempts})", 
+
+        _logger.LogWarning("Failed login attempt for username: {Username} from IP: {ClientIp} (attempt {Attempts})",
             Username, clientIp, newAttempts);
         ModelState.AddModelError(string.Empty, "Invalid username or password");
         return Page();

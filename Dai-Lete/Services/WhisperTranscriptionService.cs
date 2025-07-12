@@ -47,7 +47,7 @@ public class WhisperTranscriptionService
                 EpisodeId = episodeId,
                 PodcastId = podcastId
             };
-             
+
             using var fileStream = File.OpenRead($"{audioFilePath}.low.wav");
             await foreach (var result in processor.ProcessAsync(fileStream))
             {
@@ -65,7 +65,7 @@ public class WhisperTranscriptionService
                 }
             }
 
-            _logger.LogInformation("Transcription completed for episode {EpisodeId}. Generated {SegmentCount} segments", 
+            _logger.LogInformation("Transcription completed for episode {EpisodeId}. Generated {SegmentCount} segments",
                 episodeId, transcript.Segments.Count);
             CleanupWhisperCompatibleAudioFile(audioFilePath);
             return transcript;
@@ -79,7 +79,8 @@ public class WhisperTranscriptionService
 
     private void CleanupWhisperCompatibleAudioFile(string audioFilePath)
     {
-        if(!audioFilePath.EndsWith(".low.wav")){
+        if (!audioFilePath.EndsWith(".low.wav"))
+        {
             audioFilePath = $"{audioFilePath}.low.wav";
         }
         File.Delete(audioFilePath);
@@ -120,7 +121,7 @@ public class WhisperTranscriptionService
         }
 
         _logger.LogInformation("Downloading Whisper model to {ModelPath}", _modelPath);
-        
+
         var modelDir = Path.GetDirectoryName(_modelPath);
         if (!string.IsNullOrEmpty(modelDir) && !Directory.Exists(modelDir))
         {
@@ -133,7 +134,7 @@ public class WhisperTranscriptionService
             using var modelStream = await downloader.GetGgmlModelAsync(GgmlType.Base);
             using var fileStream = new FileStream(_modelPath, FileMode.Create, FileAccess.Write);
             await modelStream.CopyToAsync(fileStream);
-            
+
             _logger.LogInformation("Successfully downloaded Whisper model to {ModelPath}", _modelPath);
         }
         catch (Exception ex)

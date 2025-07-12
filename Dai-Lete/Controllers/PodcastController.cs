@@ -37,7 +37,7 @@ public class PodcastController : Controller
         try
         {
             var p = new Podcast(inUri);
-            
+
             // Validate we can read the URL as a feed
             try
             {
@@ -50,19 +50,19 @@ public class PodcastController : Controller
                 _logger.LogWarning(ex, "Failed to parse RSS feed: {Uri}", p.InUri);
                 return BadRequest($"Failed to parse RSS feed: {p.InUri}");
             }
-            
+
             const string sql = @"INSERT INTO Podcasts (InUri, Id) VALUES (@InUri, @Id)";
             _logger.LogInformation("Adding new podcast: {Uri} with ID: {Id}", p.InUri, p.Id);
-            
+
             using var connection = await _databaseService.GetConnectionAsync();
             var rows = await connection.ExecuteAsync(sql, new { InUri = p.InUri.ToString(), Id = p.Id });
-            
+
             if (rows != 1)
             {
                 _logger.LogWarning("Failed to insert podcast into database, possibly duplicate: {Uri} with ID: {Id}", p.InUri, p.Id);
                 return Conflict("Podcast with this ID may already exist");
             }
-            
+
             _ = FeedCache.UpdatePodcastCache(p.Id);
             return Ok(p.Id);
         }
@@ -81,27 +81,27 @@ public class PodcastController : Controller
         try
         {
             _logger.LogInformation("Deleting podcast {PodcastId}", id);
-            
+
             const string sql = @"DELETE FROM Podcasts WHERE Id = @id";
             const string episodeSql = @"SELECT Id FROM Episodes WHERE PodcastId = @pid";
-            
+
             using var connection = await _databaseService.GetConnectionAsync();
             var episodeIds = await connection.QueryAsync<string>(episodeSql, new { pid = id });
-            
+
             foreach (var eId in episodeIds)
             {
                 await DeletePodcastEpisode(id, eId);
             }
-            
+
             _logger.LogInformation("Deleting podcast {PodcastId}", id);
             var rows = await connection.ExecuteAsync(sql, new { id = id });
-            
+
             if (rows != 1)
             {
                 _logger.LogWarning("Podcast not found for deletion: {PodcastId}", id);
                 return NotFound("Podcast not found");
             }
-            
+
             FeedCache.metaDataCache.Remove(id);
             return Ok("Podcast deleted successfully");
         }
@@ -173,7 +173,7 @@ public class PodcastController : Controller
             using var connection = await _databaseService.GetConnectionAsync();
             const string sql = @"DELETE FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
             var deletedRows = await connection.ExecuteAsync(sql, new { pid = podcastId, eid = episodeGuid });
-            
+
             if (deletedRows != 1)
             {
                 _logger.LogWarning("Episode not found in database: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
@@ -202,7 +202,7 @@ public class PodcastController : Controller
                 title: "Internal Server Error");
         }
     }
-    
+
     [HttpGet("list-podcasts")]
     [Produces("application/json", "application/xml")]
     public async Task<IActionResult> listPodcasts()
@@ -237,5 +237,5 @@ public class PodcastController : Controller
                 title: "Internal Server Error");
         }
     }
-    
+
 }

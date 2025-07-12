@@ -22,8 +22,8 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
     }
-    
-    
+
+
     public Task StartAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("Episode conversion service starting");
@@ -33,10 +33,10 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
 
         _timer = new Timer(CheckFeeds, null, TimeSpan.Zero, processingInterval);
         _queueTimer = new Timer(CheckQueue, null, TimeSpan.Zero, queueCheckInterval);
-        
-        _logger.LogInformation("Timers configured - Processing: {ProcessingInterval}, Queue: {QueueInterval}", 
+
+        _logger.LogInformation("Timers configured - Processing: {ProcessingInterval}, Queue: {QueueInterval}",
             processingInterval, queueCheckInterval);
-        
+
         return Task.CompletedTask;
     }
 
@@ -54,7 +54,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         try
         {
             int processedEpisodes = 0;
-            
+
             while (!PodcastQueue.toProcessQueue.IsEmpty)
             {
                 if (!PodcastQueue.toProcessQueue.TryDequeue(out var episodeInfo))
@@ -93,18 +93,18 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         try
         {
             _logger.LogInformation("Checking feeds for new episodes");
-            
+
             var podcasts = await _podcastServices.GetPodcastsAsync();
-            
+
             foreach (var podcast in podcasts)
             {
                 try
                 {
                     var latest = await _podcastServices.GetLatestEpisodeAsync(podcast.Id);
-                    
+
                     using var connection = await _databaseService.GetConnectionAsync();
                     const string sql = "SELECT Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
-                    var existingEpisodes = await connection.QueryAsync<string>(sql, 
+                    var existingEpisodes = await connection.QueryAsync<string>(sql,
                         new { eid = latest.guid, pid = podcast.Id });
 
                     if (existingEpisodes.Any())
@@ -135,18 +135,18 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         if (string.IsNullOrWhiteSpace(episodeGuid)) throw new ArgumentException("Episode GUID cannot be null or empty", nameof(episodeGuid));
 
         _logger.LogInformation("Starting to process episode {EpisodeGuid} from {DownloadLink}", episodeGuid, downloadLink);
-        
+
         try
         {
             await _podcastServices.DownloadEpisodeAsync(podcast, downloadLink, episodeGuid);
             var fileSize = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
-            
+
             using var connection = await _databaseService.GetConnectionAsync();
             const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize) VALUES (@id, @pid, @fs)";
             await connection.ExecuteAsync(sql, new { id = episodeGuid, pid = podcast.Id, fs = fileSize });
-            
+
             _ = FeedCache.UpdatePodcastCache(podcast.Id);
-            
+
             _logger.LogInformation("Successfully processed episode {EpisodeGuid}", episodeGuid);
         }
         catch (Exception ex)
@@ -156,7 +156,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             throw;
         }
     }
-    
+
 
     public Task StopAsync(CancellationToken stoppingToken)
     {

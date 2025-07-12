@@ -18,7 +18,7 @@ public class PodcastView : PageModel
 
     public char[] InvalidChars = Path.GetInvalidFileNameChars();
     public string BaseAddress => _configManager.GetBaseAddress();
-    
+
     public void OnGet()
     {
 

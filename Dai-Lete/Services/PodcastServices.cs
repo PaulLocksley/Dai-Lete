@@ -18,12 +18,12 @@ public class PodcastServices
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _transcriptionService = transcriptionService ?? throw new ArgumentNullException(nameof(transcriptionService));
-        
-        _httpClient.DefaultRequestHeaders.Add("User-Agent", 
+
+        _httpClient.DefaultRequestHeaders.Add("User-Agent",
             "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
     }
- 
-    
+
+
     public async Task<List<Podcast>> GetPodcastsAsync()
     {
         try
@@ -47,7 +47,7 @@ public class PodcastServices
             const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
             var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
-            
+
             if (podcast is null)
             {
                 throw new ArgumentException($"Podcast with id {podcastId} not found", nameof(podcastId));
@@ -107,12 +107,12 @@ public class PodcastServices
             Directory.CreateDirectory(workingDirectory);
 
             var destinationPath = Path.Combine(workingDirectory, $"{episodeGuid}.local");
-            
+
             _logger.LogInformation("Starting download for episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
-            
+
             var episodeData = await _httpClient.GetByteArrayAsync(episodeUrl);
             await File.WriteAllBytesAsync(destinationPath, episodeData);
-            
+
             _logger.LogInformation("Successfully downloaded episode {EpisodeGuid}", episodeGuid);
         }
         catch (Exception ex)
@@ -124,13 +124,13 @@ public class PodcastServices
 
     public async Task<int> ProcessDownloadedEpisodeAsync(Guid podcastId, string episodeId)
     {
-        if (string.IsNullOrWhiteSpace(episodeId)) 
+        if (string.IsNullOrWhiteSpace(episodeId))
             throw new ArgumentException("Episode ID cannot be null or empty", nameof(episodeId));
 
         try
         {
             _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
-            
+
             var audioFilePath = GetEpisodeFilePath(podcastId, episodeId);
             if (!File.Exists(audioFilePath))
             {
@@ -139,13 +139,13 @@ public class PodcastServices
             }
 
             var transcript = await _transcriptionService.TranscribeEpisodeAsync(audioFilePath, episodeId, podcastId.ToString());
-            
+
             await SaveTranscriptAsync(transcript);
-            
+
             var fileInfo = new FileInfo(audioFilePath);
-            _logger.LogInformation("Completed processing episode {EpisodeId} with {SegmentCount} transcript segments", 
+            _logger.LogInformation("Completed processing episode {EpisodeId} with {SegmentCount} transcript segments",
                 episodeId, transcript.Segments.Count);
-            
+
             return (int)fileInfo.Length;
         }
         catch (Exception ex)
@@ -166,7 +166,7 @@ public class PodcastServices
         try
         {
             using var connection = await _databaseService.GetConnectionAsync();
-            
+
             const string createTableSql = @"
                 CREATE TABLE IF NOT EXISTS Transcripts (
                     EpisodeId TEXT NOT NULL,
@@ -178,7 +178,7 @@ public class PodcastServices
                     CreatedAt TEXT NOT NULL,
                     PRIMARY KEY (EpisodeId, PodcastId)
                 )";
-            
+
             await connection.ExecuteAsync(createTableSql);
 
             const string insertSql = @"
@@ -200,7 +200,7 @@ public class PodcastServices
                 CreatedAt = transcript.CreatedAt.ToString("O")
             });
 
-            _logger.LogInformation("Saved transcript for episode {EpisodeId} with {SegmentCount} segments", 
+            _logger.LogInformation("Saved transcript for episode {EpisodeId} with {SegmentCount} segments",
                 transcript.EpisodeId, transcript.Segments.Count);
         }
         catch (Exception ex)
@@ -209,5 +209,5 @@ public class PodcastServices
             throw;
         }
     }
-    
+
 }

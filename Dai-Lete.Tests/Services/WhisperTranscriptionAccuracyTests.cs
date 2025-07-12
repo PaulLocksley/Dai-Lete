@@ -19,7 +19,7 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
     {
         var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         _logger = loggerFactory.CreateLogger<WhisperTranscriptionService>();
-        
+
         var configBuilder = new ConfigurationBuilder();
         _testModelPath = Path.Combine(Path.GetTempPath(), "accuracy-test-whisper-model.bin");
         configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
@@ -27,7 +27,7 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
             ["Whisper:ModelPath"] = _testModelPath
         });
         _configuration = configBuilder.Build();
-        
+
         _httpClient = new HttpClient();
         _testAudioPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "audio-sample1.wav");
         _expectedTranscriptPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "transcript-audio-sample1.txt");
@@ -39,13 +39,13 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
         // Arrange
         if (!File.Exists(_testAudioPath))
         {
-            Assert.True(false, $"Test audio file not found at {_testAudioPath}");
+            Assert.Fail($"Test audio file not found at {_testAudioPath}");
             return;
         }
 
         if (!File.Exists(_expectedTranscriptPath))
         {
-            Assert.True(false, $"Expected transcript file not found at {_expectedTranscriptPath}");
+            Assert.Fail($"Expected transcript file not found at {_expectedTranscriptPath}");
             return;
         }
 
@@ -78,7 +78,7 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
         // Assert accuracy thresholds (you mentioned ~90% accuracy)
         Assert.True(wordAccuracy >= 0.70, $"Word accuracy {wordAccuracy:P2} is below 70% threshold");
         Assert.True(characterAccuracy >= 0.80, $"Character accuracy {characterAccuracy:P2} is below 80% threshold");
-        
+
         // Ideally should be around 90% as you mentioned
         if (wordAccuracy >= 0.90)
         {
@@ -100,7 +100,7 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
         // Arrange
         if (!File.Exists(_expectedTranscriptPath))
         {
-            Assert.True(false, $"Expected transcript file not found at {_expectedTranscriptPath}");
+            Assert.Fail($"Expected transcript file not found at {_expectedTranscriptPath}");
             return;
         }
 
@@ -110,12 +110,12 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
         // Assert
         Assert.NotNull(transcript);
         Assert.NotEmpty(transcript.Segments);
-        
+
         // Verify first few segments have expected structure
         var firstSegment = transcript.Segments.First();
         Assert.NotEmpty(firstSegment.Text);
         Assert.True(firstSegment.Timestamp >= TimeSpan.Zero);
-        
+
         // Log some sample segments for verification
         _logger.LogInformation("Parsed {SegmentCount} transcript segments", transcript.Segments.Count);
         foreach (var segment in transcript.Segments.Take(3))
@@ -168,7 +168,7 @@ public class WhisperTranscriptionAccuracyTests : IDisposable
     public void Dispose()
     {
         _httpClient?.Dispose();
-        
+
         if (File.Exists(_testModelPath))
         {
             try

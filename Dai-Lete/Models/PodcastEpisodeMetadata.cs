@@ -11,7 +11,7 @@ public class PodcastEpisodeMetadata
     public Podcast Podcast;
 
     public PodcastEpisodeMetadata(string episodeName, string description, DateTime? pubDate, Uri? imageLink
-        , string episodeId,Podcast podcast)
+        , string episodeId, Podcast podcast)
     {
         this.episodeName = episodeName;
         this.description = description;

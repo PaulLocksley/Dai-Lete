@@ -37,7 +37,7 @@ public class FeedCacheService
 
     public Task UpdateMetaDataAsync(Guid id, PodcastMetadata podcastMetadata)
     {
-        
+
         MetaDataCache[id] = podcastMetadata;
         _logger.LogDebug("Updated metadata cache for podcast {PodcastId}", id);
         return Task.CompletedTask;
@@ -49,7 +49,7 @@ public class FeedCacheService
         {
             _logger.LogInformation("Building feed cache");
             var podcasts = await _podcastServices.GetPodcastsAsync();
-            
+
             foreach (var podcast in podcasts)
             {
                 try
@@ -61,7 +61,7 @@ public class FeedCacheService
                     _logger.LogError(ex, "Failed to build cache for podcast {PodcastId}", podcast.Id);
                 }
             }
-            
+
             _logger.LogInformation("Feed cache built with {Count} items", FeedCache.Count);
         }
         catch (Exception ex)

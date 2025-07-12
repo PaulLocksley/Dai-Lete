@@ -14,8 +14,8 @@ public class RedirectService
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
     }
- 
-    
+
+
     public async Task<RedirectLink?> GetRedirectLinkAsync(string url)
     {
         if (string.IsNullOrWhiteSpace(url))
@@ -41,12 +41,12 @@ public class RedirectService
             const string sql = @"SELECT * FROM Redirects WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
             var result = await connection.QueryFirstOrDefaultAsync<RedirectLink?>(sql, new { id = id.ToString().ToLowerInvariant() });
-            
+
             if (!result.HasValue)
             {
                 throw new ArgumentException($"No redirect found with ID: {id}", nameof(id));
             }
-            
+
             return result.Value;
         }
         catch (Exception ex) when (!(ex is ArgumentException))
@@ -63,7 +63,7 @@ public class RedirectService
             const string sql = @"INSERT INTO Redirects (OriginalLink, Id) VALUES (@url, @id)";
             using var connection = await _databaseService.GetConnectionAsync();
             var rows = await connection.ExecuteAsync(sql, new { url = link.OriginalLink, id = link.Id });
-            
+
             if (rows != 1)
             {
                 throw new InvalidOperationException("Failed to insert redirect link");

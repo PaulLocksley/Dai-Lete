@@ -8,7 +8,7 @@ namespace Dai_Lete.Repositories;
 public static class FeedCache
 {
     private static FeedCacheService? _feedCacheService;
-    
+
     public static IDictionary<Guid, XmlDocument> feedCache => _feedCacheService?.FeedCache ?? new ConcurrentDictionary<Guid, XmlDocument>();
     public static IDictionary<Guid, PodcastMetadata> metaDataCache => _feedCacheService?.MetaDataCache ?? new ConcurrentDictionary<Guid, PodcastMetadata>();
 
@@ -34,5 +34,5 @@ public static class FeedCache
         if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
         await _feedCacheService.BuildCacheAsync();
     }
-    
+
 }

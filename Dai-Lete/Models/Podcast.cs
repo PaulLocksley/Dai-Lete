@@ -9,7 +9,7 @@ public class Podcast
     public Guid Id;
     public PodcastSettings? PodcastSettings;
     public string? PodcastName;
-    
+
     public Podcast(Uri inUri)
     {
         InUri = inUri;

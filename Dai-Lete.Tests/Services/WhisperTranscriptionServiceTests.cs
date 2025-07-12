@@ -19,10 +19,10 @@ public class WhisperTranscriptionServiceTests : IDisposable
         _mockLogger = new Mock<ILogger<WhisperTranscriptionService>>();
         _mockConfiguration = new Mock<IConfiguration>();
         _mockHttpClient = new Mock<HttpClient>();
-        
+
         _testModelPath = Path.Combine(Path.GetTempPath(), "test-whisper-model.bin");
         _testAudioPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "audio-sample1.wav");
-        
+
         _mockConfiguration.Setup(c => c["Whisper:ModelPath"]).Returns(_testModelPath);
     }
 
@@ -31,7 +31,7 @@ public class WhisperTranscriptionServiceTests : IDisposable
     {
         var httpClient = new HttpClient();
         var service = new WhisperTranscriptionService(_mockLogger.Object, _mockConfiguration.Object, httpClient);
-        
+
         Assert.NotNull(service);
     }
 
@@ -39,15 +39,15 @@ public class WhisperTranscriptionServiceTests : IDisposable
     public void Constructor_WithNullLogger_ShouldThrowArgumentNullException()
     {
         var httpClient = new HttpClient();
-        
-        Assert.Throws<ArgumentNullException>(() => 
+
+        Assert.Throws<ArgumentNullException>(() =>
             new WhisperTranscriptionService(null!, _mockConfiguration.Object, httpClient));
     }
 
     [Fact]
     public void Constructor_WithNullHttpClient_ShouldThrowArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => 
+        Assert.Throws<ArgumentNullException>(() =>
             new WhisperTranscriptionService(_mockLogger.Object, _mockConfiguration.Object, null!));
     }
 
@@ -59,12 +59,12 @@ public class WhisperTranscriptionServiceTests : IDisposable
     [InlineData("audio.mp3", "episode1", "")]
     [InlineData("audio.mp3", "episode1", null)]
     public async Task TranscribeEpisodeAsync_WithInvalidParameters_ShouldThrowArgumentException(
-        string audioFilePath, string episodeId, string podcastId)
+        string? audioFilePath, string? episodeId, string? podcastId)
     {
         var httpClient = new HttpClient();
         var service = new WhisperTranscriptionService(_mockLogger.Object, _mockConfiguration.Object, httpClient);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => 
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             service.TranscribeEpisodeAsync(audioFilePath, episodeId, podcastId));
     }
 
@@ -75,7 +75,7 @@ public class WhisperTranscriptionServiceTests : IDisposable
         var service = new WhisperTranscriptionService(_mockLogger.Object, _mockConfiguration.Object, httpClient);
         var nonExistentPath = Path.Combine(Path.GetTempPath(), "nonexistent.mp3");
 
-        await Assert.ThrowsAsync<FileNotFoundException>(() => 
+        await Assert.ThrowsAsync<FileNotFoundException>(() =>
             service.TranscribeEpisodeAsync(nonExistentPath, "episode1", "podcast1"));
     }
 

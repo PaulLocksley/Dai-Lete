@@ -36,10 +36,10 @@ public class XmlService
             var nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
 
             using var connection = await _databaseService.GetConnectionAsync();
-            
+
             const string podcastSql = @"SELECT * FROM Podcasts WHERE Id = @podcastId";
             var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(podcastSql, new { podcastId });
-            
+
             if (podcast is null)
             {
                 throw new ArgumentException($"Podcast with ID {podcastId} not found", nameof(podcastId));
@@ -58,7 +58,7 @@ public class XmlService
             await ProcessPreProcessingInstructionsAsync(rssFeed, $"{podcast.InUri.Scheme}://{podcast.InUri.Host}" +
                                                                (podcast.InUri.IsDefaultPort ? "" : $":{podcast.InUri.Port}"));
             var root = rssFeed.DocumentElement;
-            
+
             foreach (XmlElement node in root.ChildNodes)
             {
                 foreach (XmlElement item in node.ChildNodes)
@@ -88,7 +88,7 @@ public class XmlService
 
                     string? guid = null;
                     XmlNode? enclosure = null;
-                    
+
                     foreach (XmlElement element in item.ChildNodes)
                     {
                         switch (element.Name)
@@ -107,7 +107,7 @@ public class XmlService
                     if (episodes.ContainsKey(guid))
                     {
                         processedEpisodes.Add(GetEpisodeMetaData(item, podcast));
-                        
+
                         if (enclosure?.Attributes != null)
                         {
                             foreach (XmlAttribute attribute in enclosure.Attributes)
@@ -137,7 +137,7 @@ public class XmlService
             FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                     metaDataImageUrl, metaDataDescription,
                                                                     processedEpisodes, nonProcessedEpisodes));
-            
+
             _logger.LogInformation("Successfully generated feed for podcast {PodcastId}", podcastId);
             return rssFeed;
         }

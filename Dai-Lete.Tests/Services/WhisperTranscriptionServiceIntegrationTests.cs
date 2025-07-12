@@ -18,7 +18,7 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
     {
         var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         _logger = loggerFactory.CreateLogger<WhisperTranscriptionService>();
-        
+
         var configBuilder = new ConfigurationBuilder();
         _testModelPath = Path.Combine(Path.GetTempPath(), "integration-test-whisper-model.bin");
         configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
@@ -26,7 +26,7 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
             ["Whisper:ModelPath"] = _testModelPath
         });
         _configuration = configBuilder.Build();
-        
+
         _httpClient = new HttpClient();
         _testAudioPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "TestData", "audio-sample1.wav");
     }
@@ -36,20 +36,20 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
     {
         if (!File.Exists(_testAudioPath))
         {
-            Assert.True(false, $"Test audio file not found at {_testAudioPath}");
+            Assert.Fail($"Test audio file not found at {_testAudioPath}");
             return;
         }
 
         var service = new WhisperTranscriptionService(_logger, _configuration, _httpClient);
-        
+
         var result = await service.TranscribeEpisodeAsync(_testAudioPath, "test-episode", "test-podcast");
-        
+
         Assert.NotNull(result);
         Assert.Equal("test-episode", result.EpisodeId);
         Assert.Equal("test-podcast", result.PodcastId);
         Assert.NotEmpty(result.Segments);
         Assert.True(result.CreatedAt <= DateTime.UtcNow);
-        
+
         foreach (var segment in result.Segments)
         {
             Assert.True(segment.Start >= TimeSpan.Zero);
@@ -57,10 +57,10 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
             Assert.NotEmpty(segment.Text.Trim());
             Assert.True(segment.Confidence >= 0 && segment.Confidence <= 1);
         }
-        
+
         var fullText = service.GetFullTranscriptText(result);
         Assert.NotEmpty(fullText);
-        
+
         var timestampedText = service.GetTranscriptWithTimestamps(result);
         Assert.NotEmpty(timestampedText);
         Assert.Contains("[", timestampedText);
@@ -71,7 +71,7 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
         _logger.LogInformation("Total segments: {SegmentCount}", result.Segments.Count);
         _logger.LogInformation("Full text length: {TextLength} characters", fullText.Length);
         _logger.LogInformation("First 200 characters: {TextSample}", fullText.Substring(0, Math.Min(200, fullText.Length)));
-        
+
         // Log first few segments with timestamps
         foreach (var segment in result.Segments.Take(5))
         {
@@ -88,21 +88,21 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
         }
 
         var service = new WhisperTranscriptionService(_logger, _configuration, _httpClient);
-        
+
         Assert.False(File.Exists(_testModelPath));
-        
+
         try
         {
             var dummyAudioPath = Path.Combine(Path.GetTempPath(), "dummy.mp3");
             File.WriteAllText(dummyAudioPath, "dummy content");
-            
-            await Assert.ThrowsAsync<Exception>(() => 
+
+            await Assert.ThrowsAsync<Exception>(() =>
                 service.TranscribeEpisodeAsync(dummyAudioPath, "test", "test"));
         }
         catch
         {
         }
-        
+
         Assert.True(File.Exists(_testModelPath) || Directory.Exists(Path.GetDirectoryName(_testModelPath)));
     }
 
@@ -147,7 +147,7 @@ public class WhisperTranscriptionServiceIntegrationTests : IDisposable
     public void Dispose()
     {
         _httpClient?.Dispose();
-        
+
         if (File.Exists(_testModelPath))
         {
             try

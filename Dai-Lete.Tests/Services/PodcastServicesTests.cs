@@ -26,13 +26,13 @@ public class PodcastServicesTests
     {
         var httpClient = new HttpClient();
         var transcriptionService = CreateMockTranscriptionService();
-        
+
         var service = new PodcastServices(
-            _mockLogger.Object, 
-            httpClient, 
-            _mockDatabaseService.Object, 
+            _mockLogger.Object,
+            httpClient,
+            _mockDatabaseService.Object,
             transcriptionService);
-        
+
         Assert.NotNull(service);
     }
 
@@ -40,25 +40,25 @@ public class PodcastServicesTests
     public void Constructor_WithNullTranscriptionService_ShouldThrowArgumentNullException()
     {
         var httpClient = new HttpClient();
-        
-        Assert.Throws<ArgumentNullException>(() => 
+
+        Assert.Throws<ArgumentNullException>(() =>
             new PodcastServices(_mockLogger.Object, httpClient, _mockDatabaseService.Object, null!));
     }
 
     [Theory]
     [InlineData("")]
     [InlineData(null)]
-    public async Task ProcessDownloadedEpisodeAsync_WithInvalidEpisodeId_ShouldThrowArgumentException(string episodeId)
+    public async Task ProcessDownloadedEpisodeAsync_WithInvalidEpisodeId_ShouldThrowArgumentException(string? episodeId)
     {
         var httpClient = new HttpClient();
         var transcriptionService = CreateMockTranscriptionService();
         var service = new PodcastServices(
-            _mockLogger.Object, 
-            httpClient, 
-            _mockDatabaseService.Object, 
+            _mockLogger.Object,
+            httpClient,
+            _mockDatabaseService.Object,
             transcriptionService);
 
-        await Assert.ThrowsAsync<ArgumentException>(() => 
+        await Assert.ThrowsAsync<ArgumentException>(() =>
             service.ProcessDownloadedEpisodeAsync(Guid.NewGuid(), episodeId));
     }
 
@@ -68,9 +68,9 @@ public class PodcastServicesTests
         var httpClient = new HttpClient();
         var transcriptionService = CreateMockTranscriptionService();
         var service = new PodcastServices(
-            _mockLogger.Object, 
-            httpClient, 
-            _mockDatabaseService.Object, 
+            _mockLogger.Object,
+            httpClient,
+            _mockDatabaseService.Object,
             transcriptionService);
 
         var podcastId = Guid.NewGuid();
@@ -86,9 +86,9 @@ public class PodcastServicesTests
         var mockLogger = new Mock<ILogger<WhisperTranscriptionService>>();
         var mockConfig = new Mock<Microsoft.Extensions.Configuration.IConfiguration>();
         var httpClient = new HttpClient();
-        
+
         mockConfig.Setup(c => c["Whisper:ModelPath"]).Returns(Path.GetTempPath());
-        
+
         return new WhisperTranscriptionService(mockLogger.Object, mockConfig.Object, httpClient);
     }
 }

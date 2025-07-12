@@ -58,7 +58,7 @@ public class DatabaseService : IDatabaseService
             await connection.OpenAsync();
 
             await CreateTablesAsync(connection);
-            
+
             _isInitialized = true;
             _logger.LogInformation("Database initialized successfully at: {DatabasePath}", dbPath);
         }

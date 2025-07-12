@@ -115,7 +115,14 @@ public class PodcastServices
             var localHttpClient = new HttpClient();
 
             localHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
+            localHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+            localHttpClient.DefaultRequestHeaders.Add("Referer", "https://podcasts.apple.com/");
+            localHttpClient.DefaultRequestHeaders.Add("Accept", "audio/mpeg,audio/*;q=0.9,*/*;q=0.8");
+            
             remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1");
+            remoteHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-GB,en;q=0.8");
+            remoteHttpClient.DefaultRequestHeaders.Add("Referer", "https://open.spotify.com/");
+            remoteHttpClient.DefaultRequestHeaders.Add("Accept", "audio/webm,audio/ogg,audio/*;q=0.9");
 
             var workingDirectory = Path.Combine(Path.GetTempPath(), podcast.Id.ToString());
             Directory.CreateDirectory(workingDirectory);
@@ -135,6 +142,11 @@ public class PodcastServices
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
 
+            await d1;
+            
+            _logger.LogInformation("Local download completed, waiting 45 seconds before remote download to increase ad differentiation");
+            await Task.Delay(TimeSpan.FromSeconds(45));
+
             var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
                 _logger.LogInformation("remote download started");
@@ -146,7 +158,6 @@ public class PodcastServices
                 File.WriteAllBytes(destinationRemote, task.Result);
             });
 
-            await d1;
             await d2;
 
             if (d1.Status != TaskStatus.RanToCompletion || d2.Status != TaskStatus.RanToCompletion)

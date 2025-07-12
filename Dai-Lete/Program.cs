@@ -37,8 +37,7 @@ builder.WebHost.UseSentry();
 // Register services
 builder.Services.AddSingleton<IDatabaseService, DatabaseService>();
 builder.Services.AddSingleton<ConfigManager>();
-builder.Services.AddSingleton<WhisperTranscriptionService>();
-builder.Services.AddSingleton<LanguageModelService>();
+
 builder.Services.AddSingleton<PodcastServices>();
 builder.Services.AddSingleton<RedirectService>();
 builder.Services.AddSingleton<XmlService>();

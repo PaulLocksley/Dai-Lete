@@ -26,12 +26,5 @@
     <ProjectReference Include="../Dai-Lete/Dai-Lete.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="TestData/audio-sample1.wav">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="TestData/transcript-audio-sample1.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+
 </Project>

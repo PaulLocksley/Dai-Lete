@@ -10,14 +10,11 @@ public class PodcastServices
     private readonly ILogger<PodcastServices> _logger;
     private readonly HttpClient _httpClient;
     private readonly IDatabaseService _databaseService;
-    private readonly WhisperTranscriptionService _transcriptionService;
-
-    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService, WhisperTranscriptionService transcriptionService)
+    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
-        _transcriptionService = transcriptionService ?? throw new ArgumentNullException(nameof(transcriptionService));
 
         _httpClient.DefaultRequestHeaders.Add("User-Agent",
             "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
@@ -138,13 +135,8 @@ public class PodcastServices
                 return -1;
             }
 
-            var transcript = await _transcriptionService.TranscribeEpisodeAsync(audioFilePath, episodeId, podcastId.ToString());
-
-            await SaveTranscriptAsync(transcript);
-
             var fileInfo = new FileInfo(audioFilePath);
-            _logger.LogInformation("Completed processing episode {EpisodeId} with {SegmentCount} transcript segments",
-                episodeId, transcript.Segments.Count);
+            _logger.LogInformation("Completed processing episode {EpisodeId}", episodeId);
 
             return (int)fileInfo.Length;
         }
@@ -161,53 +153,6 @@ public class PodcastServices
         return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.wav");
     }
 
-    private async Task SaveTranscriptAsync(EpisodeTranscript transcript)
-    {
-        try
-        {
-            using var connection = await _databaseService.GetConnectionAsync();
 
-            const string createTableSql = @"
-                CREATE TABLE IF NOT EXISTS Transcripts (
-                    EpisodeId TEXT NOT NULL,
-                    PodcastId TEXT NOT NULL,
-                    FullText TEXT NOT NULL,
-                    TimestampedText TEXT NOT NULL,
-                    SegmentCount INTEGER NOT NULL,
-                    Language TEXT NOT NULL,
-                    CreatedAt TEXT NOT NULL,
-                    PRIMARY KEY (EpisodeId, PodcastId)
-                )";
-
-            await connection.ExecuteAsync(createTableSql);
-
-            const string insertSql = @"
-                INSERT OR REPLACE INTO Transcripts 
-                (EpisodeId, PodcastId, FullText, TimestampedText, SegmentCount, Language, CreatedAt)
-                VALUES (@EpisodeId, @PodcastId, @FullText, @TimestampedText, @SegmentCount, @Language, @CreatedAt)";
-
-            var fullText = _transcriptionService.GetFullTranscriptText(transcript);
-            var timestampedText = _transcriptionService.GetTranscriptWithTimestamps(transcript);
-
-            await connection.ExecuteAsync(insertSql, new
-            {
-                transcript.EpisodeId,
-                transcript.PodcastId,
-                FullText = fullText,
-                TimestampedText = timestampedText,
-                SegmentCount = transcript.Segments.Count,
-                transcript.Language,
-                CreatedAt = transcript.CreatedAt.ToString("O")
-            });
-
-            _logger.LogInformation("Saved transcript for episode {EpisodeId} with {SegmentCount} segments",
-                transcript.EpisodeId, transcript.Segments.Count);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save transcript for episode {EpisodeId}", transcript.EpisodeId);
-            throw;
-        }
-    }
 
 }

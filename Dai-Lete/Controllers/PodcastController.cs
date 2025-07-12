@@ -192,7 +192,7 @@ public class PodcastController : Controller
                 return NotFound("Episode not found in database");
             }
 
-            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.mp3");
+            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.wav");
             if (System.IO.File.Exists(filepath))
             {
                 System.IO.File.Delete(filepath);

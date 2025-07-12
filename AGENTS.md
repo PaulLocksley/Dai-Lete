@@ -3,12 +3,13 @@
 ## Build/Test Commands
 - **Build**: `dotnet build Dai-Lete/Dai-Lete.csproj`
 - **Run**: `dotnet run --project Dai-Lete/Dai-Lete.csproj`
+- **Test**: `dotnet test Dai-Lete.Tests/Dai-Lete.Tests.csproj`
 - **Publish**: `dotnet publish Dai-Lete/Dai-Lete.csproj -c Release`
 - **Docker**: `docker build -t dai-lete .`
-- **No formal test framework found** - add tests using xUnit or NUnit if needed
 
 ## Project Structure
-- **Main project**: `Dai-Lete/` (ASP.NET Core 8.0 web app)
+- **Main project**: `Dai-Lete/` (ASP.NET Core 9.0 web app)
+- **Test project**: `Dai-Lete.Tests/` (xUnit test suite with audio/transcript fixtures)
 - **Controllers**: API endpoints for podcast management
 - **Models**: Data models (Podcast, PodcastMetadata, etc.)
 - **Services**: Business logic (PodcastServices, XmlService, etc.)

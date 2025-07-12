@@ -1,16 +1,19 @@
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
+using Dai_Lete.Middleware;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.FileProviders;
+using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add configuration options
 builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
+builder.Services.Configure<MetricsIpFilterOptions>(builder.Configuration.GetSection(MetricsIpFilterOptions.SectionName));
 
 // Add authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -34,9 +37,19 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.WebHost.UseSentry();
 
+// Add OpenTelemetry metrics
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(builder =>
+    {
+        builder
+            .AddMeter("Dai_Lete.Podcast")
+            .AddPrometheusExporter();
+    });
+
 // Register services
 builder.Services.AddSingleton<IDatabaseService, DatabaseService>();
 builder.Services.AddSingleton<ConfigManager>();
+builder.Services.AddSingleton<PodcastMetricsService>();
 
 builder.Services.AddSingleton<PodcastServices>();
 builder.Services.AddSingleton<RedirectService>();
@@ -95,11 +108,14 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseRouting();
 
+app.UseMiddleware<MetricsIpFilterMiddleware>();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
+app.MapPrometheusScrapingEndpoint();
 
 // Initialize database
 var databaseService = app.Services.GetRequiredService<IDatabaseService>();

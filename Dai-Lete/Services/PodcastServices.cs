@@ -239,12 +239,20 @@ public class PodcastServices
             Thread.Sleep(100);
         }
 
-        process.Kill();
-        var workingL = File.OpenRead(workingLocal);
-        var workingR = File.OpenRead(workingRemote);
-        var workingLLength = new FileInfo(workingLocal).Length;
-        var workingRLength = new FileInfo(workingRemote).Length;
-        var outStream = File.Create(processedFile);
+            process.Kill();
+
+            var localDuration = await GetAudioDurationAsync(workingLocal);
+            var remoteDuration = await GetAudioDurationAsync(workingRemote);
+
+            var workingL = File.OpenRead(workingLocal);
+            var workingR = File.OpenRead(workingRemote);
+            var workingLLength = new FileInfo(workingLocal).Length;
+            var workingRLength = new FileInfo(workingRemote).Length;
+            var outStream = File.Create(processedFile);
+
+            var localBytesPerSecond = workingLLength / localDuration.TotalSeconds;
+            var remoteBytesPerSecond = workingRLength / remoteDuration.TotalSeconds;
+            var searchWindowSeconds = 120.0;
 
         var oneP = 1024; //read hopefully all meta data and file headers. 
 
@@ -272,7 +280,16 @@ public class PodcastServices
                 continue;
             }
 
-            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
+            var currentTimeL = (workingL.Position - oneP) / localBytesPerSecond;
+            var expectedRemotePosition = (long)(currentTimeL * remoteBytesPerSecond) + oneP;
+            var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
+            var searchStart = Math.Max(oneP, expectedRemotePosition - maxSearchBytes / 2);
+            var searchEnd = Math.Min(workingRLength - byteWindow, expectedRemotePosition + maxSearchBytes / 2);
+
+            _logger.LogDebug("Searching for match at time {Time}s, expected remote pos {Pos}, window {Start}-{End}", 
+                currentTimeL, expectedRemotePosition, searchStart, searchEnd);
+
+            for (long i = searchStart; i <= searchEnd; i += byteWindow / 10)
             {
                 workingR.Seek(i, SeekOrigin.Begin);
                 workingR.Read(bufferR, 0, byteWindow);

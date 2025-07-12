@@ -19,10 +19,10 @@ public class PodcastServicesTests
         _mockLogger = new Mock<ILogger<PodcastServices>>();
         _mockHttpClient = new Mock<HttpClient>();
         _mockDatabaseService = new Mock<IDatabaseService>();
-        
+
         var mockMetricsLogger = new Mock<ILogger<PodcastMetricsService>>();
         _metricsService = new PodcastMetricsService(mockMetricsLogger.Object);
-        
+
         var mockConfigLogger = new Mock<ILogger<ConfigManager>>();
         var mockConfiguration = new Mock<IConfiguration>();
         mockConfiguration.Setup(c => c["ProxyAddress"]).Returns("127.0.0.1:1080");

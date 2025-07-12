@@ -118,7 +118,7 @@ public class PodcastServices
             localHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
             localHttpClient.DefaultRequestHeaders.Add("Referer", "https://podcasts.apple.com/");
             localHttpClient.DefaultRequestHeaders.Add("Accept", "audio/mpeg,audio/*;q=0.9,*/*;q=0.8");
-            
+
             remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1");
             remoteHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-GB,en;q=0.8");
             remoteHttpClient.DefaultRequestHeaders.Add("Referer", "https://open.spotify.com/");
@@ -143,7 +143,7 @@ public class PodcastServices
             });
 
             await d1;
-            
+
             _logger.LogInformation("Local download completed, waiting 45 seconds before remote download to increase ad differentiation");
             await Task.Delay(TimeSpan.FromSeconds(45));
 
@@ -233,22 +233,22 @@ public class PodcastServices
             string ffmpegArgsFinal = $"-y -i \"{processedFile}\" \"{finalFile}\"";
 
 
-        Process process = new Process();
-        process.StartInfo.FileName = "ffmpeg";
-        process.StartInfo.Arguments = ffmpegArgsL;
-        process.EnableRaisingEvents = false;
-        process.Start();
-        while (!process.HasExited)
-        {
-            Thread.Sleep(100);
-        }
+            Process process = new Process();
+            process.StartInfo.FileName = "ffmpeg";
+            process.StartInfo.Arguments = ffmpegArgsL;
+            process.EnableRaisingEvents = false;
+            process.Start();
+            while (!process.HasExited)
+            {
+                Thread.Sleep(100);
+            }
 
-        process.StartInfo.Arguments = ffmpegArgsR;
-        process.Start();
-        while (!process.HasExited)
-        {
-            Thread.Sleep(100);
-        }
+            process.StartInfo.Arguments = ffmpegArgsR;
+            process.Start();
+            while (!process.HasExited)
+            {
+                Thread.Sleep(100);
+            }
 
             process.Kill();
 
@@ -265,73 +265,74 @@ public class PodcastServices
             var remoteBytesPerSecond = workingRLength / remoteDuration.TotalSeconds;
             var searchWindowSeconds = 120.0;
 
-        var oneP = 1024; //read hopefully all meta data and file headers. 
+            var oneP = 1024; //read hopefully all meta data and file headers. 
 
 
-        var twoP = oneP;
-        workingR.Seek(oneP, SeekOrigin.Begin);
-        var byteWindow = 120000;
+            var twoP = oneP;
+            workingR.Seek(oneP, SeekOrigin.Begin);
+            var byteWindow = 120000;
 
-        var headers = new byte[oneP];
-        workingL.Read(headers, 0, oneP);
-        outStream.Write(headers);
+            var headers = new byte[oneP];
+            workingL.ReadExactly(headers, 0, oneP);
+            outStream.Write(headers);
 
-        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
-        {
-            var bufferL = new byte[byteWindow];
-            var bufferR = new byte[byteWindow];
-            var initialR = workingR.Position;
-            workingL.Read(bufferL, 0, byteWindow);
-            workingR.Read(bufferR, 0, byteWindow);
-
-
-            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
+            while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
             {
-                outStream.Write(bufferL);
-                continue;
-            }
+                var bufferL = new byte[byteWindow];
+                var bufferR = new byte[byteWindow];
+                var initialR = workingR.Position;
+                workingL.ReadExactly(bufferL, 0, byteWindow);
+                workingR.ReadExactly(bufferR, 0, byteWindow);
 
-            var currentTimeL = (workingL.Position - oneP) / localBytesPerSecond;
-            var expectedRemotePosition = (long)(currentTimeL * remoteBytesPerSecond) + oneP;
-            var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
-            var searchStart = Math.Max(oneP, expectedRemotePosition - maxSearchBytes / 2);
-            var searchEnd = Math.Min(workingRLength - byteWindow, expectedRemotePosition + maxSearchBytes / 2);
 
-            _logger.LogDebug("Searching for match at time {Time}s, expected remote pos {Pos}, window {Start}-{End}", 
-                currentTimeL, expectedRemotePosition, searchStart, searchEnd);
-
-            for (long i = searchStart; i <= searchEnd; i += byteWindow / 10)
-            {
-                workingR.Seek(i, SeekOrigin.Begin);
-                workingR.Read(bufferR, 0, byteWindow);
-                if (bufferL.SequenceEqual(bufferR))
+                if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
                 {
                     outStream.Write(bufferL);
-                    break;
+                    continue;
                 }
+
+                var currentTimeL = (workingL.Position - oneP) / localBytesPerSecond;
+                var expectedRemotePosition = (long)(currentTimeL * remoteBytesPerSecond) + oneP;
+                var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
+                var searchStart = Math.Max(oneP, expectedRemotePosition - maxSearchBytes / 2);
+                var searchEnd = Math.Min(workingRLength - byteWindow, expectedRemotePosition + maxSearchBytes / 2);
+
+                _logger.LogDebug("Searching for match at time {Time}s, expected remote pos {Pos}, window {Start}-{End}",
+                    currentTimeL, expectedRemotePosition, searchStart, searchEnd);
+
+                for (long i = searchStart; i <= searchEnd; i += byteWindow / 10)
+                {
+                    workingR.Seek(i, SeekOrigin.Begin);
+                    workingR.ReadExactly(bufferR, 0, byteWindow);
+                    if (bufferL.SequenceEqual(bufferR))
+                    {
+                        outStream.Write(bufferL);
+                        break;
+                    }
+                }
+
+                workingR.Seek(initialR, SeekOrigin.Begin);
             }
+            outStream.Close();
+            workingL.Close();
+            workingR.Close();
+            //one more process :) 
 
-            workingR.Seek(initialR, SeekOrigin.Begin);
+            process.StartInfo.Arguments = ffmpegArgsFinal;
+            process.Start();
+            while (!process.HasExited) { Thread.Sleep(100); }
+            process.Kill();
+
+            File.Delete(preLocal);
+            File.Delete(workingLocal);
+            File.Delete(preRemote);
+            File.Delete(workingRemote);
+            File.Delete(processedFile);
+            _logger.LogInformation($"Completed processing {episodeId}");
+
+
+            return (int)new FileInfo(finalFile).Length;
         }
-        outStream.Close();
-        workingL.Close();
-        workingR.Close();
-        //one more process :) 
-
-        process.StartInfo.Arguments = ffmpegArgsFinal;
-        process.Start();
-        while (!process.HasExited) { Thread.Sleep(100); }
-        process.Kill();
-
-        File.Delete(preLocal);
-        File.Delete(workingLocal);
-        File.Delete(preRemote);
-        File.Delete(workingRemote);
-        File.Delete(processedFile);
-        _logger.LogInformation($"Completed processing {episodeId}");
-
-
-        return (int)new FileInfo(finalFile).Length;        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to process episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
@@ -393,7 +394,7 @@ public class PodcastServices
             const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
             var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
-            
+
             if (podcast?.InUri != null)
             {
                 var rssFeed = new XmlDocument();

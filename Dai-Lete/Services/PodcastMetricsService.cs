@@ -14,7 +14,7 @@ public class PodcastMetricsService
 
     private static readonly Histogram<double> TimeSavedHistogram = Meter.CreateHistogram<double>(
         "podcast_time_saved_seconds",
-        "seconds", 
+        "seconds",
         "Time saved per episode by removing ads");
 
     private readonly ILogger<PodcastMetricsService> _logger;
@@ -27,10 +27,10 @@ public class PodcastMetricsService
     public void RecordTimeSaved(Guid podcastId, string episodeId, TimeSpan timeSaved, string? podcastName = null)
     {
         var timeSavedSeconds = timeSaved.TotalSeconds;
-        
+
         if (timeSavedSeconds < 0)
         {
-            _logger.LogWarning("Negative time saved recorded for podcast {PodcastId}, episode {EpisodeId}: {TimeSaved}s", 
+            _logger.LogWarning("Negative time saved recorded for podcast {PodcastId}, episode {EpisodeId}: {TimeSaved}s",
                 podcastId, episodeId, timeSavedSeconds);
             return;
         }
@@ -49,7 +49,7 @@ public class PodcastMetricsService
         TimeSavedCounter.Add(timeSavedSeconds, tags);
         TimeSavedHistogram.Record(timeSavedSeconds, tags);
 
-        _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for podcast {PodcastId}, episode {EpisodeId}", 
+        _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for podcast {PodcastId}, episode {EpisodeId}",
             timeSavedSeconds, podcastId, episodeId);
     }
 }

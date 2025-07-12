@@ -21,7 +21,7 @@ public class MetricsIpFilterMiddleware
         if (context.Request.Path.StartsWithSegments("/metrics"))
         {
             var clientIp = GetClientIpAddress(context);
-            
+
             if (!IsIpAllowed(clientIp))
             {
                 _logger.LogWarning("Metrics access denied for IP: {ClientIp}", clientIp);
@@ -83,7 +83,7 @@ public class MetricsIpFilterMiddleware
             }
             else
             {
-                if (IPAddress.TryParse(allowedIp, out var allowedIpAddress) && 
+                if (IPAddress.TryParse(allowedIp, out var allowedIpAddress) &&
                     ipAddress.Equals(allowedIpAddress))
                 {
                     return true;
@@ -101,7 +101,7 @@ public class MetricsIpFilterMiddleware
             var parts = cidrRange.Split('/');
             if (parts.Length != 2) return false;
 
-            if (!IPAddress.TryParse(parts[0], out var networkAddress) || 
+            if (!IPAddress.TryParse(parts[0], out var networkAddress) ||
                 !int.TryParse(parts[1], out var prefixLength))
             {
                 return false;
@@ -147,6 +147,6 @@ public class MetricsIpFilterMiddleware
 public class MetricsIpFilterOptions
 {
     public const string SectionName = "MetricsIpFilter";
-    
+
     public List<string> AllowedIps { get; set; } = new();
 }

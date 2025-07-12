@@ -20,6 +20,8 @@
     <PackageReference Include="System.ServiceModel.Syndication" Version="9.0.0" />
     <PackageReference Include="Whisper.net" Version="1.8.1" />
     <PackageReference Include="Whisper.net.Runtime" Version="1.8.1" />
+    <PackageReference Include="LLamaSharp" Version="0.15.0" />
+    <PackageReference Include="LLamaSharp.Backend.Cpu" Version="0.15.0" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="tests\fixtures\transcripts\" />

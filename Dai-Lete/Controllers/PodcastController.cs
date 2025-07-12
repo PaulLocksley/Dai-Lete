@@ -21,7 +21,7 @@ public class PodcastController : Controller
     [HttpPost("add")]
     public IActionResult addPodcast(Uri inUri, string authToken)
     {
-        if (ConfigManager.getAuthToken(inUri.ToString()) != authToken)
+        if (ConfigManager.GetAuthToken(inUri.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);
@@ -54,7 +54,7 @@ public class PodcastController : Controller
     [HttpDelete("delete")]
     public IActionResult deletePodcast(Guid id, string authToken)
     {
-        if (ConfigManager.getAuthToken(id.ToString()) != authToken)
+        if (ConfigManager.GetAuthToken(id.ToString()) != authToken)
         {
             Console.WriteLine($"{authToken} did not match expected value");
             return StatusCode(401);
@@ -85,7 +85,7 @@ public class PodcastController : Controller
         {
             throw new Exception("Error, could not parse podcast Guid or podcast not known to server.");
         }
-        PodcastQueue.toProcessQueue.Enqueue((Podcast:new Podcast(podcastGUID,podcastInUri),episodeUrl: episodeUrl,episodeGuid: episodeGuid));
+        PodcastQueue.toProcessQueue.Enqueue((Podcast:new Podcast(podcastGUID,podcastInUri))),episodeUrl: episodeUrl,episodeGuid: episodeGuid));
         return $"Episode added to queue. {PodcastQueue.toProcessQueue.Count} item/s in queue ";
     }
 

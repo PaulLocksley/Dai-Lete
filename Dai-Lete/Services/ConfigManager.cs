@@ -6,13 +6,13 @@ namespace Dai_Lete.Services;
 public static class ConfigManager
 {
     private static readonly IConfiguration Configuration;
-    public static string getBaseAddress()
+    public static string GetBaseAddress()
     {
         var env = Environment.GetEnvironmentVariable("baseAddress");
         return env ?? "127.0.0.1";
     }
 
-    public static string getAuthToken(string salt)
+    public static string GetAuthToken(string salt)
     {
         var accessToken = Environment.GetEnvironmentVariable("accessToken");
         
@@ -23,11 +23,6 @@ public static class ConfigManager
         return hashBuilder.ToString();
     }
 
-    public static string getProxyAddress()
-    {
-        var proxyAddress = Environment.GetEnvironmentVariable("proxyAddress");
-        return proxyAddress ?? "192.168.20.56";
-    }
 }
 
 

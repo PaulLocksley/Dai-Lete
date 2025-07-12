@@ -89,7 +89,7 @@ public class XmlService
                         switch (atr.Name)
                         {
                             case "url":
-                                atr.Value = $"https://{ConfigManager.getBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
+                                atr.Value = $"https://{ConfigManager.GetBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
                                 break;
                             case "length":
                                 atr.Value = episodes[guid].ToString();

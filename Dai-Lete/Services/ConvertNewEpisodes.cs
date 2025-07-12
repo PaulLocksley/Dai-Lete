@@ -77,7 +77,7 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
             try
             {
                 var sql = "Select Id FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
-                var latest = PodcastServices.GetLatestEpsiode(podcast.Id);
+                var latest = PodcastServices.GetLatestEpisode(podcast.Id);
                 var episodeList = SqLite.Connection().Query<string>(sql, new { eid = latest.guid, pid = podcast.Id });
 
                 if (episodeList.Any())

@@ -3,35 +3,33 @@ using System.Runtime.InteropServices;
 namespace Dai_Lete.Models;
 
 
-[Serializable]
 public class Podcast
 {
     public Uri InUri;
     public Guid Id;
+    public PodcastSettings? PodcastSettings;
+    public string? PodcastName;
     
     public Podcast(Uri inUri)
     {
         InUri = inUri;
         Id = Guid.NewGuid();
+        PodcastSettings = new PodcastSettings(new List<string>());
 
     }
-
     public Podcast(string id, string inUri)
     {
         InUri = new Uri(inUri);
         Id = new Guid(id);
     }
-    public Dictionary<Uri,Uri> GetEpisodes()
+    public Podcast(string id, string inUri, PodcastSettings podcastSettings)
     {
-        var EpisodesDict = new Dictionary<Uri, Uri>();
-
-
-
-        return EpisodesDict;
+        InUri = new Uri(inUri);
+        Id = new Guid(id);
+        PodcastSettings = podcastSettings;
     }
-
     public override string ToString()
     {
-        return $"{Id.ToString()}, {InUri}";
+        return $"{Id.ToString()}, {PodcastName} {InUri}";
     }
 }

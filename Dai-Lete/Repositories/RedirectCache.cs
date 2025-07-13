@@ -23,6 +23,11 @@ public class RedirectCache
         if (!_cache.TryGetValue(cacheKey, out string? cachedHtml))
         {
             var record = await _redirectService.GetRedirectLinkAsync(id);
+            if (record == null)
+            {
+                return "<html><body><h1>Redirect not found</h1></body></html>";
+            }
+            
             var client = _httpClientFactory.CreateClient();
             cachedHtml = await client.GetStringAsync(record.OriginalLink);
 

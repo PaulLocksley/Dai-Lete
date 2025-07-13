@@ -1,21 +1,16 @@
-using System.Diagnostics.Metrics;
-using System.Diagnostics;
-using Dai_Lete.Models;
+using Prometheus;
 
 namespace Dai_Lete.Services;
 
 public class PodcastMetricsService
 {
-    private static readonly Meter Meter = new("Dai_Lete.Podcast");
-    private static readonly Counter<double> TimeSavedCounter = Meter.CreateCounter<double>(
-        "podcast_time_saved_seconds_total",
-        "seconds",
-        "Total time saved by removing ads from podcasts");
+    private static readonly Counter TimeSavedCounter = Metrics
+        .CreateCounter("podcast_time_saved_seconds_total", "Total time saved by removing ads from podcasts",
+            new[] { "podcast_id", "episode_id", "podcast_name" });
 
-    private static readonly Histogram<double> TimeSavedHistogram = Meter.CreateHistogram<double>(
-        "podcast_time_saved_seconds",
-        "seconds",
-        "Time saved per episode by removing ads");
+    private static readonly Histogram TimeSavedHistogram = Metrics
+        .CreateHistogram("podcast_time_saved_seconds", "Time saved per episode by removing ads",
+            new[] { "podcast_id", "episode_id", "podcast_name" });
 
     private readonly ILogger<PodcastMetricsService> _logger;
 
@@ -35,19 +30,10 @@ public class PodcastMetricsService
             return;
         }
 
-        var tags = new TagList
-        {
-            { "podcast_id", podcastId.ToString() },
-            { "episode_id", episodeId }
-        };
+        var labels = new[] { podcastId.ToString(), episodeId, podcastName ?? "" };
 
-        if (!string.IsNullOrEmpty(podcastName))
-        {
-            tags.Add("podcast_name", podcastName);
-        }
-
-        TimeSavedCounter.Add(timeSavedSeconds, tags);
-        TimeSavedHistogram.Record(timeSavedSeconds, tags);
+        TimeSavedCounter.WithLabels(labels).Inc(timeSavedSeconds);
+        TimeSavedHistogram.WithLabels(labels).Observe(timeSavedSeconds);
 
         _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for podcast {PodcastId}, episode {EpisodeId}",
             timeSavedSeconds, podcastId, episodeId);

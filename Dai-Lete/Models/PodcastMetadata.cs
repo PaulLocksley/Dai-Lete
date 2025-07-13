@@ -9,7 +9,7 @@ public struct PodcastMetadata
     public IList<PodcastEpisodeMetadata> processedEpisodes;
     public IList<PodcastEpisodeMetadata> nonProcessedEpisodes;
 
-    public PodcastMetadata(string title, string publisher, Uri? imageUrl, string description, 
+    public PodcastMetadata(string title, string publisher, Uri? imageUrl, string description,
         IList<PodcastEpisodeMetadata> processedEpisodes, IList<PodcastEpisodeMetadata> nonProcessedEpisodes)
     {
         this.title = title;

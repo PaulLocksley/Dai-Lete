@@ -1,32 +1,84 @@
-using System.Security.Cryptography;
-using System.Text;
+
 
 namespace Dai_Lete.Services;
 
-public static class ConfigManager
+public class ConfigManager
 {
-    private static readonly IConfiguration Configuration;
-    public static string getBaseAddress()
+    private readonly ILogger<ConfigManager> _logger;
+    private readonly IConfiguration _configuration;
+
+    public ConfigManager(ILogger<ConfigManager> logger, IConfiguration configuration)
     {
-        var env = Environment.GetEnvironmentVariable("baseAddress");
-        return env ?? "127.0.0.1";
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     }
 
-    public static string getAuthToken(string salt)
+    public string GetBaseAddress()
     {
-        var accessToken = Environment.GetEnvironmentVariable("accessToken");
-        
-        byte[] hashBytes = SHA256.HashData(Encoding.UTF8.GetBytes(
-            salt + ":" + (accessToken ?? "1234")));
-        StringBuilder hashBuilder = new StringBuilder();
-        foreach (byte b in hashBytes) { hashBuilder.Append(b.ToString("x2")); }
-        return hashBuilder.ToString();
+        try
+        {
+            var baseAddress = _configuration["BaseAddress"] ?? Environment.GetEnvironmentVariable("baseAddress");
+            return baseAddress ?? "127.0.0.1";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get base address");
+            return "127.0.0.1";
+        }
     }
 
-    public static string getProxyAddress()
+    public string GetUsername()
     {
-        var proxyAddress = Environment.GetEnvironmentVariable("proxyAddress");
-        return proxyAddress ?? "192.168.20.56";
+        try
+        {
+            return _configuration["Auth:Username"] ?? Environment.GetEnvironmentVariable("AUTH_USERNAME") ?? "admin";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get username");
+            return "admin";
+        }
+    }
+
+    public string GetPassword()
+    {
+        try
+        {
+            return _configuration["Auth:Password"] ?? Environment.GetEnvironmentVariable("AUTH_PASSWORD") ?? "password";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get password");
+            return "password";
+        }
+    }
+
+    public string GetProxyAddress()
+    {
+        try
+        {
+            var proxyAddress = _configuration["ProxyAddress"] ?? Environment.GetEnvironmentVariable("proxyAddress");
+            return proxyAddress ?? throw new InvalidOperationException("Proxy address not configured");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get proxy address");
+            throw;
+        }
+    }
+
+    public string GetPodcastStoragePath()
+    {
+        try
+        {
+            var storagePath = _configuration["PodcastStoragePath"] ?? Environment.GetEnvironmentVariable("podcastStoragePath");
+            return storagePath ?? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get podcast storage path, using default");
+            return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts");
+        }
     }
 }
 

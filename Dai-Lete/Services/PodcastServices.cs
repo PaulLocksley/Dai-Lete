@@ -1,258 +1,637 @@
+using System.Buffers;
+using System.Xml;
 using System.Diagnostics;
 using System.Net;
-using System.Runtime.InteropServices;
-using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Utilities;
-using Dai_Lete.Services;
 using Dapper;
-using Microsoft.AspNetCore.Connections;
 
 namespace Dai_Lete.Services;
 
-public static class PodcastServices
+public class PodcastServices
 {
-    private static readonly ILogger<ConvertNewEpisodes> _logger = new Logger<ConvertNewEpisodes>(new LoggerFactory());
- 
-    
-    public static List<Podcast> GetPodcasts()
+    private readonly ILogger<PodcastServices> _logger;
+    private readonly HttpClient _httpClient;
+    private readonly IDatabaseService _databaseService;
+    private readonly PodcastMetricsService _metricsService;
+    private readonly ConfigManager _configManager;
+    public PodcastServices(ILogger<PodcastServices> logger, HttpClient httpClient, IDatabaseService databaseService, PodcastMetricsService metricsService, ConfigManager configManager)
     {
-        var sql = @"Select * From Podcasts";
-        var results = SqLite.Connection().Query<Podcast>(sql);
-        return results.ToList();
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+
+        _httpClient.DefaultRequestHeaders.Add("User-Agent",
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
     }
 
-    public static (string guid, string downloadLink) GetLatestEpsiode(Guid podcastId)
+
+    public async Task<List<Podcast>> GetPodcastsAsync()
     {
-        var RssFeed = new XmlDocument();
-        var sql = @"SELECT * FROM Podcasts where id = @id";
-        Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new {id = podcastId});
-        if (podcast is null)
-        {
-            throw new FileNotFoundException($"Failed to locate podcast with id {podcastId}");
-        }
         try
         {
-            using (var reader = XmlReader.Create(podcast.InUri.ToString()))
-            {
-                RssFeed.Load(reader);
-            }
+            const string sql = @"SELECT * FROM Podcasts";
+            using var connection = await _databaseService.GetConnectionAsync();
+            var results = await connection.QueryAsync<Podcast>(sql);
+            return results.ToList();
         }
-        catch
+        catch (Exception ex)
         {
-            throw new Exception($"Failed to parse {podcast.InUri}");
+            _logger.LogError(ex, "Failed to retrieve podcasts");
+            throw;
         }
-        foreach (XmlElement node in RssFeed.DocumentElement.ChildNodes)
-        {
-            foreach (XmlElement n2 in node.ChildNodes)
-            {
-                if (n2.Name != "item")
-                {
-                    continue;
-                }
-
-                string? guid = null;
-                XmlNode? enclosure = null;
-                String downloadLink = null;
-                foreach (XmlElement n3 in n2.ChildNodes)
-                {
-                    if (n3.Name == "guid")
-                    {
-                        guid = string.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));
-                    }
-
-                    if (n3.Name == "enclosure") { enclosure = n3;}
-                }
-                foreach (XmlAttribute atr in enclosure.Attributes) {
-                    if (atr.Name == "url")
-                    {
-                        downloadLink = atr.Value;
-                        break;
-                    }
-                }
-                if (downloadLink is null || guid is null)
-                {
-                    throw new Exception($"Failed to parse {podcast.InUri}");
-                }
-                return(guid: guid,downloadLink:downloadLink);
-            }
-        }
-        throw new FileNotFoundException($"Could not find episode for podcast: {podcastId}");
     }
 
-    public static void DownloadEpisode(Podcast podcast, string episodeUrl,string episodeGuid)
+    public async Task<(string guid, string downloadLink)> GetLatestEpisodeAsync(Guid podcastId)
     {
-        //setup clients.
-        var remoteHttpClientHandler = new HttpClientHandler
-        {
-            Proxy = new WebProxy($"socks5://{ConfigManager.getProxyAddress()}")
-            /*AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 10*/
-            
-        };
-        var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
-        var localHttpClient = new HttpClient();
-        localHttpClient.DefaultRequestHeaders.Add("User-Agent","Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1" ); 
-        remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1"); 
-        
-        
-        
-        //make folders.
-        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}";//todo config
-        var di = new DirectoryInfo($"{AppDomain.CurrentDomain.BaseDirectory}");
-        di.CreateSubdirectory("tmp");
-        if (!Directory.Exists($"{workingDirectory}{podcast.Id}"))
-        {
-            Directory.CreateDirectory($"{workingDirectory}{podcast.Id}");
-        }
-
-        workingDirectory = $"{workingDirectory}{podcast.Id}{Path.DirectorySeparatorChar}";
-        var destinationLocal = ($"{workingDirectory}{episodeGuid}.local");
-        var destinationRemote = ($"{workingDirectory}{episodeGuid}.remote");
         try
         {
+            const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            using var connection = await _databaseService.GetConnectionAsync();
+            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
+
+            if (podcast is null)
+            {
+                throw new ArgumentException($"Podcast with id {podcastId} not found", nameof(podcastId));
+            }
+
+            var rssFeed = new XmlDocument();
+            using var reader = XmlReader.Create(podcast.InUri.ToString());
+            rssFeed.Load(reader);
+
+            foreach (XmlElement node in rssFeed.DocumentElement.ChildNodes)
+            {
+                foreach (XmlElement item in node.ChildNodes)
+                {
+                    if (item.Name != "item") continue;
+
+                    string? guid = null;
+                    XmlNode? enclosure = null;
+
+                    foreach (XmlElement element in item.ChildNodes)
+                    {
+                        switch (element.Name)
+                        {
+                            case "guid":
+                                guid = string.Concat(element.InnerText.Split(Path.GetInvalidFileNameChars()));
+                                break;
+                            case "enclosure":
+                                enclosure = element;
+                                break;
+                        }
+                    }
+
+                    if (enclosure?.Attributes?["url"]?.Value is string downloadLink && !string.IsNullOrEmpty(guid))
+                    {
+                        return (guid, downloadLink);
+                    }
+                }
+            }
+
+            throw new InvalidOperationException($"No episodes found for podcast: {podcastId}");
+        }
+        catch (Exception ex) when (!(ex is ArgumentException || ex is InvalidOperationException))
+        {
+            _logger.LogError(ex, "Failed to parse RSS feed for podcast {PodcastId}", podcastId);
+            throw new InvalidOperationException($"Failed to parse RSS feed for podcast {podcastId}", ex);
+        }
+    }
+
+    public async Task DownloadEpisodeAsync(Podcast podcast, string episodeUrl, string episodeGuid)
+    {
+        if (podcast is null) throw new ArgumentNullException(nameof(podcast));
+        if (string.IsNullOrWhiteSpace(episodeUrl)) throw new ArgumentException("Episode URL cannot be null or empty", nameof(episodeUrl));
+        if (string.IsNullOrWhiteSpace(episodeGuid)) throw new ArgumentException("Episode GUID cannot be null or empty", nameof(episodeGuid));
+
+        try
+        {
+            var remoteHttpClientHandler = new HttpClientHandler
+            {
+                Proxy = new WebProxy($"socks5://{_configManager.GetProxyAddress()}")
+            };
+            var remoteHttpClient = new HttpClient(remoteHttpClientHandler);
+            var localHttpClient = new HttpClient();
+
+            localHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:15.0) Gecko/20100101 Firefox/15.0.1");
+            localHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-US,en;q=0.9");
+            localHttpClient.DefaultRequestHeaders.Add("Referer", "https://podcasts.apple.com/");
+            localHttpClient.DefaultRequestHeaders.Add("Accept", "audio/mpeg,audio/*;q=0.9,*/*;q=0.8");
+
+            remoteHttpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.10 Safari/605.1.1");
+            remoteHttpClient.DefaultRequestHeaders.Add("Accept-Language", "en-GB,en;q=0.8");
+            remoteHttpClient.DefaultRequestHeaders.Add("Referer", "https://open.spotify.com/");
+            remoteHttpClient.DefaultRequestHeaders.Add("Accept", "audio/webm,audio/ogg,audio/*;q=0.9");
+
+            var workingDirectory = Path.Combine(Path.GetTempPath(), podcast.Id.ToString());
+            Directory.CreateDirectory(workingDirectory);
+            var destinationLocal = Path.Combine(workingDirectory, $"{episodeGuid}.local");
+            var destinationRemote = Path.Combine(workingDirectory, $"{episodeGuid}.remote");
+
+            _logger.LogInformation("Starting dual download for episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
+
             var d1 = localHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
                 _logger.LogInformation("local download started");
                 if (task.IsFaulted)
                 {
-                    Console.WriteLine($"Local download failed: {task.Exception}");
+                    _logger.LogError(task.Exception, "Local download failed");
+                    throw task.Exception ?? new Exception("Local download failed");
                 }
                 File.WriteAllBytes(destinationLocal, task.Result);
             });
+
+            await d1;
+
+            _logger.LogInformation("Local download completed, waiting 45 seconds before remote download to increase ad differentiation");
+            await Task.Delay(TimeSpan.FromSeconds(45));
+
             var d2 = remoteHttpClient.GetByteArrayAsync(episodeUrl).ContinueWith(task =>
             {
                 _logger.LogInformation("remote download started");
                 if (task.IsFaulted)
-                {   
+                {
                     _logger.LogError("remote download failed: {AggregateException}", task.Exception);
-                    throw task.Exception;
+                    throw task.Exception ?? new Exception("Remote download failed");
                 }
                 File.WriteAllBytes(destinationRemote, task.Result);
             });
 
+            await d2;
 
-                d1.Wait();
-                d2.Wait();
-                if (d1.Status != TaskStatus.RanToCompletion || d2.Status != TaskStatus.RanToCompletion)
+            if (d1.Status != TaskStatus.RanToCompletion || d2.Status != TaskStatus.RanToCompletion)
             {
                 throw new Exception($"{d1.Exception} \n {d2.Exception}");
             }
 
-            _logger.LogInformation("Downloads apparently done.");
+            _logger.LogInformation("Successfully downloaded episode {EpisodeGuid} via both local and remote connections", episodeGuid);
+
+            localHttpClient.Dispose();
+            remoteHttpClient.Dispose();
+            remoteHttpClientHandler.Dispose();
         }
-        catch (Exception e)
+        catch (Exception ex)
         {
-            _logger.LogWarning($"Download failed of {episodeUrl}\n{e}");
+            _logger.LogError(ex, "Failed to download episode {EpisodeGuid} from {EpisodeUrl}", episodeGuid, episodeUrl);
             throw;
         }
     }
 
-    public static int ProcessDownloadedEpisode(Guid id, string episodeId)
+    public async Task<int> ProcessDownloadedEpisodeAsync(Guid podcastId, string episodeId)
     {
-        _logger.LogInformation($"Starting to process {episodeId}");
-        var workingDirectory = $"{AppDomain.CurrentDomain.BaseDirectory}tmp{Path.DirectorySeparatorChar}{id}{Path.DirectorySeparatorChar}";
-        var preLocal = ($"{workingDirectory}{episodeId}.local");
-        var workingLocal = $"{preLocal}.wav";
-        var preRemote = ($"{workingDirectory}{episodeId}.remote");
-        var workingRemote = $"{preLocal}.wav";
-        var processedFile = $"{workingDirectory}{episodeId}processed.wav";
-        var finalFolder = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}{id}";
-        var finalFile = $"{finalFolder}{Path.DirectorySeparatorChar}{episodeId}.mp3";
-        if (!Directory.Exists(finalFolder))
-        {
-            DirectoryInfo di = Directory.CreateDirectory(finalFolder);
-        }
-        
-        if(FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
-        {
-            _logger.LogWarning($"Episodes are identical {episodeId}");
-            File.Move(preLocal,finalFile);
-            File.Delete(preRemote);
-            return (int)new FileInfo(finalFile).Length;
-        }
-        
-        string ffmpegArgsL = $" -y -i '{preLocal}'  '{workingLocal}'";
-        string ffmpegArgsR = $" -y -i {preRemote}  {workingRemote}";
-        string ffmpegArgsFinal = $"-y -i {processedFile} {finalFile}";
-        Process process = new Process();
-        process.StartInfo.FileName = "ffmpeg";
-        process.StartInfo.Arguments = ffmpegArgsL;
-        process.EnableRaisingEvents = false;
-        process.Start();
-        while (!process.HasExited)
-        {
-            Thread.Sleep(100);
-        }
+        if (string.IsNullOrWhiteSpace(episodeId))
+            throw new ArgumentException("Episode ID cannot be null or empty", nameof(episodeId));
 
-        process.StartInfo.Arguments = ffmpegArgsR;
-        process.Start();
-        while (!process.HasExited)
+        try
         {
-            Thread.Sleep(100);
-        }
+            _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
 
-        process.Kill();
-        var workingL = File.OpenRead(workingLocal);
-        var workingR = File.OpenRead(workingRemote);
-        var workingLLength = new FileInfo(workingLocal).Length;
-        var workingRLength = new FileInfo(workingRemote).Length;
-        var outStream = File.Create(processedFile);
-
-        var oneP = 1024; //read hopefully all meta data and file headers. 
-        var twoP = oneP;
-        workingR.Seek(oneP, SeekOrigin.Begin);
-        var byteWindow = 120000;
-
-        var headers = new byte[oneP];
-        workingL.Read(headers, 0, oneP);
-        outStream.Write(headers);
-
-        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
-        {
-            var bufferL = new byte[byteWindow];
-            var bufferR = new byte[byteWindow];
-            var initialR = workingR.Position;
-            workingL.Read(bufferL, 0, byteWindow);
-            workingR.Read(bufferR, 0, byteWindow);
-            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
+            var workingDirectory = Path.Combine(Path.GetTempPath(), podcastId.ToString());
+            var originalFilePath = Path.Combine(workingDirectory, $"{episodeId}.local");
+            if (!File.Exists(originalFilePath))
             {
-                outStream.Write(bufferL);
-                continue;
+                _logger.LogWarning("Original audio file not found for episode {EpisodeId}: {FilePath}", episodeId, originalFilePath);
+                return -1;
             }
 
-            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
+            var originalDuration = await GetAudioDurationAsync(originalFilePath);
+            _logger.LogDebug("Original episode duration: {Duration} for {EpisodeId}", originalDuration, episodeId);
+
+            _logger.LogInformation($"Starting to process {episodeId}");
+
+            var preLocal = Path.Combine(workingDirectory, $"{episodeId}.local");
+            var workingLocal = $"{preLocal}.wav";
+            var preRemote = Path.Combine(workingDirectory, $"{episodeId}.remote");
+            var workingRemote = $"{preRemote}.wav";
+            var processedFile = Path.Combine(workingDirectory, $"{episodeId}processed.wav");
+
+            var finalFolder = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString());
+            var finalFile = Path.Combine(finalFolder, $"{episodeId}.mp3");
+
+            if (!Directory.Exists(finalFolder))
             {
-                workingR.Seek(i, SeekOrigin.Begin);
-                workingR.Read(bufferR, 0, byteWindow);
-                if (bufferL.SequenceEqual(bufferR))
+                DirectoryInfo di = Directory.CreateDirectory(finalFolder);
+            }
+
+            if (!File.Exists(preRemote))
+            {
+                _logger.LogError("Remote audio file not found for episode {EpisodeId}: {FilePath}", episodeId, preRemote);
+                throw new FileNotFoundException($"Remote audio file not found: {preRemote}");
+            }
+
+            if (FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
+            {
+                _logger.LogWarning($"Episodes are identical {episodeId}");
+                File.Move(preLocal, finalFile);
+                File.Delete(preRemote);
+                return (int)new FileInfo(finalFile).Length;
+            }
+
+            // Convert to consistent low-quality mono WAV to reduce compression variance
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingRemote}\"";
+            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" \"{finalFile}\"";
+
+
+            Process process = new Process();
+            process.StartInfo.FileName = "ffmpeg";
+            process.StartInfo.Arguments = ffmpegArgsL;
+            process.EnableRaisingEvents = false;
+            process.Start();
+            while (!process.HasExited)
+            {
+                Thread.Sleep(100);
+            }
+
+            process.StartInfo.Arguments = ffmpegArgsR;
+            process.Start();
+            while (!process.HasExited)
+            {
+                Thread.Sleep(100);
+            }
+            //this is taking forever or not matching. think about it overnight.
+            process.Kill();
+            var workingL = File.OpenRead(workingLocal);
+            var workingR = File.OpenRead(workingRemote);
+            var workingLLength = new FileInfo(workingLocal).Length;
+            var workingRLength = new FileInfo(workingRemote).Length;
+            var outStream = File.Create(processedFile);
+
+            var oneP = 1024; //read hopefully all meta data and file headers. 
+            var twoP = oneP;
+            workingR.Seek(oneP, SeekOrigin.Begin);
+            var audioLength = await GetAudioDurationAsync(workingLocal);
+            var bytesPerSecond = workingLLength / audioLength.TotalSeconds;
+            var fiveSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 5);
+
+            var headers = new byte[oneP];
+            workingL.ReadExactly(headers, 0, oneP);
+            outStream.Write(headers);
+            var dropedFramesSinceLastHit = 0;
+            var bufferL = new byte[fiveSecondByteWindow];
+            var bufferR = new byte[fiveSecondByteWindow];
+            while (workingL.Position + fiveSecondByteWindow < workingLLength && workingR.Position + fiveSecondByteWindow < workingRLength)
+            {
+                bufferL.AsSpan().Clear();
+                bufferR.AsSpan().Clear();
+                var initialR = workingR.Position;
+                workingL.ReadExactly(bufferL, 0, fiveSecondByteWindow);
+                workingR.ReadExactly(bufferR, 0, fiveSecondByteWindow);
+                var spanL = bufferL.AsSpan();
+                var spanR = bufferR.AsSpan();
+                if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
                 {
                     outStream.Write(bufferL);
+                    dropedFramesSinceLastHit = 0;
+                    continue;
+                }
+                // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
+                var lookAheadCap = Math.Min((initialR + (fiveSecondByteWindow * 48) + (fiveSecondByteWindow * dropedFramesSinceLastHit)), workingRLength);
+                var readDistance = (int)(lookAheadCap - initialR);
+                var bigBufferR = new byte[readDistance];
+                workingR.Seek(initialR + 1, SeekOrigin.Begin);
+                var bytesRead = workingR.Read(bigBufferR, 0, readDistance);
+                var lookAheadSPan = bigBufferR.AsSpan(0, bytesRead);
+                for (var offset = 1; offset < lookAheadSPan.Length - fiveSecondByteWindow; offset++)
+                {
+                    var candidate = lookAheadSPan.Slice(offset, fiveSecondByteWindow);
+                    if (!spanL.SequenceEqual(candidate)) continue;
+                    outStream.Write(bufferL);
+                    dropedFramesSinceLastHit = 0;
                     break;
                 }
+
+                dropedFramesSinceLastHit++;
+                workingR.Seek(initialR, SeekOrigin.Begin);
+            }
+            outStream.Close();
+            workingL.Close();
+            workingR.Close();
+            //one more process :) 
+
+            process.StartInfo.Arguments = ffmpegArgsFinal;
+            process.Start();
+            while (!process.HasExited) { Thread.Sleep(100); }
+            process.Kill();
+
+            File.Delete(preLocal);
+            File.Delete(workingLocal);
+            File.Delete(preRemote);
+            File.Delete(workingRemote);
+            File.Delete(processedFile);
+
+            _logger.LogInformation($"Completed processing {episodeId}");
+            return (int)new FileInfo(finalFile).Length;
+            // process.Kill();
+            // var workingL = File.OpenRead(workingLocal);
+            // var workingR = File.OpenRead(workingRemote);
+            // var workingLLength = new FileInfo(workingLocal).Length;
+            // var workingRLength = new FileInfo(workingRemote).Length;
+            // var outStream = File.Create(processedFile);
+            //
+            // var oneP = 1024; //read hopefully all meta data and file headers. 
+            //
+            // var twoP = oneP;
+            // workingR.Seek(oneP, SeekOrigin.Begin);
+            // var byteWindow = 8192; // Smaller window for better sync detection
+            //
+            // var headers = new byte[oneP];
+            // workingL.ReadExactly(headers, 0, oneP);
+            // outStream.Write(headers);
+            //
+            // // Calculate bytes per second for time-based positioning
+            // var localDuration = await GetAudioDurationAsync(workingLocal);
+            // var remoteDuration = await GetAudioDurationAsync(workingRemote);
+            // var localBytesPerSecond = (workingLLength - oneP) / localDuration.TotalSeconds;
+            // var remoteBytesPerSecond = (workingRLength - oneP) / remoteDuration.TotalSeconds;
+            //
+            // // Track segments to remove (start and end times in seconds)
+            // var segmentsToRemove = new List<(double start, double end)>();
+            // var currentSegmentStart = -1.0;
+            // var baseSearchWindowSeconds = 60.0; // 1 minute base search window for better precision
+            // var lastMatchTime = 0.0;
+            //
+            // while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+            // {
+            //     var bufferL = new byte[byteWindow];
+            //     var bufferR = new byte[byteWindow];
+            //     var initialR = workingR.Position;
+            //     workingL.Read(bufferL, 0, byteWindow);
+            //     workingR.Read(bufferR, 0, byteWindow);
+            //     
+            //     // Calculate current time position in local file
+            //     var currentTimeL = (workingL.Position - oneP - byteWindow) / localBytesPerSecond;
+            //     
+            //     if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //     {
+            //         // Found exact match - close any open removal segment
+            //         if (currentSegmentStart >= 0)
+            //         {
+            //             segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //             currentSegmentStart = -1.0;
+            //         }
+            //         lastMatchTime = 0.0;
+            //         continue;
+            //     }
+            //
+            //     // Search forward for match within time window
+            //     var searchWindowSeconds = baseSearchWindowSeconds + lastMatchTime;
+            //     var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
+            //     var searchEnd = Math.Min(workingRLength - byteWindow, initialR + maxSearchBytes);
+            //     
+            //     bool matchFound = false;
+            //     // Smaller step size for better sync detection
+            //     for (long i = initialR + 1; i <= searchEnd; i += byteWindow / 4)
+            //     {
+            //         workingR.Seek(i, SeekOrigin.Begin);
+            //         workingR.Read(bufferR, 0, byteWindow);
+            //         if (bufferL.SequenceEqual(bufferR) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //         {
+            //             // Found match - close any open removal segment
+            //             if (currentSegmentStart >= 0)
+            //             {
+            //                 segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //                 currentSegmentStart = -1.0;
+            //             }
+            //             workingR.Seek(i + byteWindow, SeekOrigin.Begin);
+            //             lastMatchTime = 0.0;
+            //             matchFound = true;
+            //             break;
+            //         }
+            //     }
+            //     
+            //     if (!matchFound)
+            //     {
+            //         // No match found - start tracking removal segment if not already started
+            //         if (currentSegmentStart < 0)
+            //         {
+            //             currentSegmentStart = currentTimeL;
+            //         }
+            //         lastMatchTime += byteWindow / localBytesPerSecond;
+            //         
+            //         // If we've been searching for a while, try a wider search to find re-sync
+            //         if (lastMatchTime > 20.0) // After 20 seconds of no matches, do wider search
+            //         {
+            //             var wideSearchEnd = Math.Min(workingRLength - byteWindow, initialR + (long)(180.0 * remoteBytesPerSecond)); // 3 minute wide search
+            //             for (long j = initialR + byteWindow; j <= wideSearchEnd; j += byteWindow)
+            //             {
+            //                 workingR.Seek(j, SeekOrigin.Begin);
+            //                 workingR.Read(bufferR, 0, byteWindow);
+            //                 if (bufferL.SequenceEqual(bufferR) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //                 {
+            //                     // Found re-sync! Close current removal segment and continue from here
+            //                     segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //                     currentSegmentStart = -1.0;
+            //                     workingR.Seek(j + byteWindow, SeekOrigin.Begin);
+            //                     lastMatchTime = 0.0;
+            //                     matchFound = true;
+            //                     break;
+            //                 }
+            //             }
+            //         }
+            //         
+            //         if (!matchFound)
+            //         {
+            //             workingR.Seek(initialR, SeekOrigin.Begin);
+            //         }
+            //     }
+            // }
+            //
+            // // Close any final open removal segment
+            // if (currentSegmentStart >= 0)
+            // {
+            //     var finalTime = (workingL.Position - oneP) / localBytesPerSecond;
+            //     segmentsToRemove.Add((currentSegmentStart, finalTime));
+            // }
+            //
+            // workingL.Close();
+            // workingR.Close();
+            // outStream.Close();
+            //
+            // // Log the segments we're removing for debugging
+            // _logger.LogInformation("Found {Count} segments to remove:", segmentsToRemove.Count);
+            // foreach (var (start, end) in segmentsToRemove)
+            // {
+            //     _logger.LogInformation("  Remove: {Start:F2}s - {End:F2}s ({Duration:F2}s)", start, end, end - start);
+            // }
+            //
+            // // Now edit the original file to remove the identified segments
+            // await RemoveSegmentsFromOriginalFile(preLocal, finalFile, segmentsToRemove);
+            //
+            //
+            // File.Delete(preLocal);
+            // File.Delete(workingLocal);
+            // File.Delete(preRemote);
+            // File.Delete(workingRemote);
+            // File.Delete(processedFile);
+            //
+            // _logger.LogInformation($"Completed processing {episodeId}");
+            // return (int)new FileInfo(finalFile).Length;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
+            throw;
+        }
+    }
+
+    private string GetEpisodeFilePath(Guid podcastId, string episodeId)
+    {
+        var baseDir = _configManager.GetPodcastStoragePath();
+        return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.mp3");
+    }
+
+    public async Task<TimeSpan> GetAudioDurationAsync(string filePath)
+    {
+        try
+        {
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = "ffprobe",
+                Arguments = $"-v quiet -show_entries format=duration -of csv=\"p=0\" \"{filePath}\"",
+                RedirectStandardOutput = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                throw new InvalidOperationException("Failed to start ffprobe process");
             }
 
-            workingR.Seek(initialR, SeekOrigin.Begin);
+            var output = await process.StandardOutput.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            if (process.ExitCode != 0)
+            {
+                throw new InvalidOperationException($"ffprobe failed with exit code {process.ExitCode}");
+            }
+
+            if (double.TryParse(output.Trim(), out var durationSeconds))
+            {
+                return TimeSpan.FromSeconds(durationSeconds);
+            }
+
+            throw new InvalidOperationException($"Failed to parse duration from ffprobe output: {output}");
         }
-        outStream.Close();
-        workingL.Close();
-        workingR.Close();
-        //one more process :) 
-        
-        process.StartInfo.Arguments = ffmpegArgsFinal;
-        process.Start();
-        while (!process.HasExited) { Thread.Sleep(100); }
-        process.Kill();
-        
-        File.Delete(preLocal);
-        File.Delete(workingLocal);
-        File.Delete(preRemote);
-        File.Delete(workingRemote);
-        File.Delete(processedFile);
-        
-        _logger.LogInformation($"Completed processing {episodeId}");
-        return (int)new FileInfo(finalFile).Length;
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get audio duration for file: {FilePath}", filePath);
+            return TimeSpan.Zero;
+        }
     }
-    
+
+
+    private async Task<string?> GetPodcastNameAsync(Guid podcastId)
+    {
+        try
+        {
+            const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            using var connection = await _databaseService.GetConnectionAsync();
+            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
+
+            if (podcast?.InUri != null)
+            {
+                var rssFeed = new XmlDocument();
+                using var reader = XmlReader.Create(podcast.InUri.ToString());
+                rssFeed.Load(reader);
+
+                var titleNode = rssFeed.SelectSingleNode("//channel/title");
+                return titleNode?.InnerText?.Trim();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to get podcast name for {PodcastId}", podcastId);
+        }
+
+        return null;
+    }
+
+    private static double CalculateByteSimilarity(byte[] buffer1, byte[] buffer2)
+    {
+        if (buffer1.Length != buffer2.Length) return 0.0;
+
+        // Fast sampling approach - check every 4th byte for better accuracy
+        int sampleStep = 4;
+        int matchingBytes = 0;
+        int totalSamples = 0;
+
+        for (int i = 0; i < buffer1.Length; i += sampleStep)
+        {
+            // Allow moderate differences (within 6 values) to account for encoding differences
+            if (Math.Abs(buffer1[i] - buffer2[i]) <= 6)
+            {
+                matchingBytes++;
+            }
+            totalSamples++;
+        }
+
+        return totalSamples > 0 ? (double)matchingBytes / totalSamples : 0.0;
+    }
+
+    private async Task RemoveSegmentsFromOriginalFile(string inputFile, string outputFile, List<(double start, double end)> segmentsToRemove)
+    {
+        if (segmentsToRemove.Count == 0)
+        {
+            // No segments to remove, just copy the original file
+            File.Copy(inputFile, outputFile, true);
+            return;
+        }
+
+        // Build ffmpeg filter to remove segments
+        var filterParts = new List<string>();
+        var currentTime = 0.0;
+
+        foreach (var (start, end) in segmentsToRemove.OrderBy(s => s.start))
+        {
+            if (start > currentTime)
+            {
+                // Include segment from currentTime to start
+                filterParts.Add($"between(t,{currentTime:F3},{start:F3})");
+            }
+            currentTime = Math.Max(currentTime, end);
+        }
+
+        // Include final segment if there's audio after the last removal
+        var totalDuration = await GetAudioDurationAsync(inputFile);
+        if (currentTime < totalDuration.TotalSeconds)
+        {
+            filterParts.Add($"between(t,{currentTime:F3},{totalDuration.TotalSeconds:F3})");
+        }
+
+        if (filterParts.Count == 0)
+        {
+            // Everything was removed, create empty file
+            File.WriteAllBytes(outputFile, Array.Empty<byte>());
+            return;
+        }
+
+        var filter = string.Join("+", filterParts);
+        var ffmpegArgs = $"-y -i \"{inputFile}\" -af \"aselect='{filter}',asetpts=N/SR/TB\" \"{outputFile}\"";
+
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = ffmpegArgs,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true
+            }
+        };
+
+        process.Start();
+        await process.WaitForExitAsync();
+
+        if (process.ExitCode != 0)
+        {
+            var error = await process.StandardError.ReadToEndAsync();
+            throw new InvalidOperationException($"ffmpeg failed to remove segments: {error}");
+        }
+    }
 }

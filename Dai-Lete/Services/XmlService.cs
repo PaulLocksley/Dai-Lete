@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Xml;
 using Dai_Lete.Models;
@@ -9,109 +8,144 @@ namespace Dai_Lete.Services;
 
 public class XmlService
 {
-    public static XmlDocument GenerateNewFeed(Guid podcastId)
+    private readonly ILogger<XmlService> _logger;
+    private readonly ConfigManager _configManager;
+    private readonly RedirectService _redirectService;
+    private readonly IDatabaseService _databaseService;
+
+    public XmlService(ILogger<XmlService> logger, ConfigManager configManager, RedirectService redirectService, IDatabaseService databaseService)
     {
-        //Generate a new XML feed for the podcast, generating the feed will also refresh the metadata cache for this pod
-        var RssFeed = new XmlDocument();
-        
-        string metaDataName = String.Empty;
-        Uri? metaDataImageUrl = null;
-        string metaDataAuthor = String.Empty;
-        string metaDataDescription = String.Empty;
-        IList<PodcastEpisodeMetadata> processedEpisodes = new List<PodcastEpisodeMetadata>();
-        IList<PodcastEpisodeMetadata> nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
-        
-        var sql = @"SELECT * FROM Podcasts where id = @podcastId";
-        Podcast podcast = SqLite.Connection().QueryFirst<Podcast>(sql,new { podcastId = podcastId});
-        
-        sql = @"SELECT Id,FileSize FROM Episodes where PodcastId = @pid";
-        var episodes = SqLite.Connection().Query(sql, new { pid = podcastId }).ToDictionary(
-                row=> (string)row.Id, 
-                row => (int)row.FileSize
-                );
-        if (podcast is null)
-        {
-            throw new FileNotFoundException($"Failed to locate podcast with podcastId {podcastId}");
-        }
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
+        _redirectService = redirectService ?? throw new ArgumentNullException(nameof(redirectService));
+        _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+    }
+
+    public async Task<XmlDocument> GenerateNewFeedAsync(Guid podcastId)
+    {
         try
         {
-            using (var reader = XmlReader.Create(podcast.InUri.ToString()))
+            _logger.LogInformation("Generating new feed for podcast {PodcastId}", podcastId);
+
+            var rssFeed = new XmlDocument();
+            string metaDataName = string.Empty;
+            Uri? metaDataImageUrl = null;
+            string metaDataAuthor = string.Empty;
+            string metaDataDescription = string.Empty;
+            var processedEpisodes = new List<PodcastEpisodeMetadata>();
+            var nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
+
+            using var connection = await _databaseService.GetConnectionAsync();
+
+            const string podcastSql = @"SELECT * FROM Podcasts WHERE Id = @podcastId";
+            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(podcastSql, new { podcastId });
+
+            if (podcast is null)
             {
-                RssFeed.Load(reader);
+                throw new ArgumentException($"Podcast with ID {podcastId} not found", nameof(podcastId));
             }
-        }
-        catch
-        {
-            throw new Exception($"Failed to parse {podcast.InUri}");
-        }
-        ProcessPreProcessingInstructions(RssFeed,$"{podcast.InUri.Scheme}://{podcast.InUri.Host}" +
-                                                 (podcast.InUri.IsDefaultPort ? "" : $":{podcast.InUri.Port}"));
-        var root = RssFeed.DocumentElement;
-        
-        foreach (XmlElement node in root.ChildNodes)
-        {
-            foreach (XmlElement n2 in node.ChildNodes)
+
+            const string episodesSql = @"SELECT Id, FileSize FROM Episodes WHERE PodcastId = @pid";
+            var episodesQuery = await connection.QueryAsync(episodesSql, new { pid = podcastId });
+            var episodes = episodesQuery.ToDictionary(
+                row => (string)row.Id,
+                row => (int)row.FileSize
+            );
+
+            using var reader = XmlReader.Create(podcast.InUri.ToString());
+            rssFeed.Load(reader);
+
+            await ProcessPreProcessingInstructionsAsync(rssFeed, $"{podcast.InUri.Scheme}://{podcast.InUri.Host}" +
+                                                               (podcast.InUri.IsDefaultPort ? "" : $":{podcast.InUri.Port}"));
+            var root = rssFeed.DocumentElement;
+
+            foreach (XmlElement node in root.ChildNodes)
             {
-                if (n2.Name != "item")
+                foreach (XmlElement item in node.ChildNodes)
                 {
-                    //build metadata.
-                    switch (n2.Name)
+                    if (item.Name != "item")
                     {
-                        case "title":
-                            metaDataName = n2.InnerText;
-                            break;
-                        case "description":
-                            metaDataDescription = n2.InnerText;
-                            break;
-                        case "itunes:author":
-                            metaDataAuthor = n2.InnerText;
-                            break;
-                        case "itunes:image":
-                            metaDataImageUrl = new Uri(n2.Attributes.GetNamedItem("href").InnerText);
-                            break;
-                    }
-                    continue;
-                }
-
-                string? guid = null;
-                XmlNode? enclosure = null;
-                foreach (XmlElement n3 in n2.ChildNodes)
-                {
-                    if (n3.Name == "guid") { guid = String.Concat(n3.InnerText.Split(Path.GetInvalidFileNameChars()));}//todo: Set this globally.
-                    if (n3.Name == "enclosure") { enclosure = n3;}
-                }
-
-                if(episodes.ContainsKey(guid))
-                {
-                    processedEpisodes.Add(GetEpisodeMetaData(n2,podcast));
-                    foreach (XmlAttribute atr in enclosure.Attributes)
-                    {
-                        switch (atr.Name)
+                        switch (item.Name)
                         {
-                            case "url":
-                                atr.Value = $"https://{ConfigManager.getBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
+                            case "title":
+                                metaDataName = item.InnerText;
                                 break;
-                            case "length":
-                                atr.Value = episodes[guid].ToString();
+                            case "description":
+                                metaDataDescription = item.InnerText;
                                 break;
-                            case "type":
-                                atr.Value = "audio/mpeg";
+                            case "itunes:author":
+                                metaDataAuthor = item.InnerText;
+                                break;
+                            case "itunes:image":
+                                if (Uri.TryCreate(item.Attributes?.GetNamedItem("href")?.InnerText, UriKind.Absolute, out var imageUri))
+                                {
+                                    metaDataImageUrl = imageUri;
+                                }
+                                break;
+                        }
+                        continue;
+                    }
+
+                    string? guid = null;
+                    XmlNode? enclosure = null;
+
+                    foreach (XmlElement element in item.ChildNodes)
+                    {
+                        switch (element.Name)
+                        {
+                            case "guid":
+                                guid = string.Concat(element.InnerText.Split(Path.GetInvalidFileNameChars()));
+                                break;
+                            case "enclosure":
+                                enclosure = element;
                                 break;
                         }
                     }
-                }
-                else
-                {
-                    nonProcessedEpisodes.Add(GetEpisodeMetaData(n2,podcast));
+
+                    if (string.IsNullOrEmpty(guid)) continue;
+
+                    if (episodes.ContainsKey(guid))
+                    {
+                        processedEpisodes.Add(GetEpisodeMetaData(item, podcast));
+
+                        if (enclosure?.Attributes != null)
+                        {
+                            foreach (XmlAttribute attribute in enclosure.Attributes)
+                            {
+                                switch (attribute.Name)
+                                {
+                                    case "url":
+                                        attribute.Value = $"https://{_configManager.GetBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
+                                        break;
+                                    case "length":
+                                        attribute.Value = episodes[guid].ToString();
+                                        break;
+                                    case "type":
+                                        attribute.Value = "audio/mpeg";
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        nonProcessedEpisodes.Add(GetEpisodeMetaData(item, podcast));
+                    }
                 }
             }
-        }
 
-        //metadata area.
-        FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
-                                                                metaDataImageUrl, metaDataDescription,
-                                                                processedEpisodes,nonProcessedEpisodes));
-        return RssFeed;
+            FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
+                                                                    metaDataImageUrl, metaDataDescription,
+                                                                    processedEpisodes, nonProcessedEpisodes));
+
+            _logger.LogInformation("Successfully generated feed for podcast {PodcastId}", podcastId);
+            return rssFeed;
+        }
+        catch (Exception ex) when (!(ex is ArgumentException))
+        {
+            _logger.LogError(ex, "Failed to generate feed for podcast {PodcastId}", podcastId);
+            throw new InvalidOperationException($"Failed to generate feed for podcast {podcastId}", ex);
+        }
     }
 
 
@@ -135,16 +169,15 @@ public class XmlService
                     pm.pubDate = DateTime.Parse(node.InnerText);
                     break;
                 case "itunes:image":
-                    //todo fix uri parsing elsewhere.
-                    if(Uri.TryCreate(node.Attributes.GetNamedItem("href")?.InnerText, UriKind.Absolute, out var outUri))
+                    if (Uri.TryCreate(node.Attributes?.GetNamedItem("href")?.InnerText, UriKind.Absolute, out var imageUri))
                     {
-                        pm.imageLink = outUri;
+                        pm.imageLink = imageUri;
                     }
                     break;
                 case "enclosure":
-                    if(Uri.TryCreate(node.Attributes.GetNamedItem("url")?.InnerText, UriKind.Absolute, out var outUri2))
+                    if (Uri.TryCreate(node.Attributes?.GetNamedItem("url")?.InnerText, UriKind.Absolute, out var downloadUri))
                     {
-                        pm.downloadLink = outUri2;
+                        pm.downloadLink = downloadUri;
                     }
                     break;
             }
@@ -152,35 +185,34 @@ public class XmlService
         return pm;
     }
 
-    private static void ProcessPreProcessingInstructions(XmlDocument xmlDocument, string baseUri)
+    private async Task ProcessPreProcessingInstructionsAsync(XmlDocument xmlDocument, string baseUri)
     {
+        if (xmlDocument is null) throw new ArgumentNullException(nameof(xmlDocument));
+        if (string.IsNullOrWhiteSpace(baseUri)) throw new ArgumentException("Base URI cannot be null or empty", nameof(baseUri));
+
         try
         {
-
-
-            const string matchPattern = """(.*href=["|'])(\/.+)(["|'].*)""";
+            const string matchPattern = @"(.*href=[""'])(\/.+)([""'].*)";
 
             foreach (XmlNode node in xmlDocument.ChildNodes)
             {
-                if (node is not XmlProcessingInstruction || node.Value is null)
+                if (node is not XmlProcessingInstruction || string.IsNullOrEmpty(node.Value))
                 {
                     continue;
                 }
 
                 var match = Regex.Match(node.Value, matchPattern);
-                if (!match.Success)
-                {
-                    continue;
-                }
+                if (!match.Success) continue;
 
                 var url = baseUri + match.Groups[2].Value;
-                var redirectLink = RedirectService.GetOrCreateRedirectLink(url);
+                var redirectLink = await _redirectService.GetOrCreateRedirectLinkAsync(url);
                 node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}{match.Groups[3].Value}";
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine(ex.Message);
+            _logger.LogError(ex, "Failed to process preprocessing instructions for base URI: {BaseUri}", baseUri);
+            throw;
         }
     }
 }

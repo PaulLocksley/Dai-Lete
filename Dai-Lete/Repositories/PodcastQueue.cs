@@ -5,6 +5,6 @@ namespace Dai_Lete.Repositories;
 
 public static class PodcastQueue
 {
-    public static ConcurrentQueue<(Podcast podcast, string episodeUrl,string episodeGuid)> toProcessQueue = new();
-    
+    public static ConcurrentQueue<(Podcast podcast, string episodeUrl, string episodeGuid)> toProcessQueue = new();
+
 }

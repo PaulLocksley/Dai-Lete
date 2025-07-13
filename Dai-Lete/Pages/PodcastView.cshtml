@@ -51,7 +51,7 @@
                         <br/>
                         
                         <audio controls>
-                        <source src=@Html.Raw($"https://{ConfigManager.getBaseAddress()}/Podcasts/{p.Podcast.Id}/{String.Concat(p.episodeId.Split(Model.InvalidChars))}.mp3")
+                        <source src=@Html.Raw($"https://{Model.BaseAddress}/Podcasts/{p.Podcast.Id}/{String.Concat(p.episodeId.Split(Model.InvalidChars))}.mp3")
                                 type="audio/mpeg">
                         </audio>
                     </td>

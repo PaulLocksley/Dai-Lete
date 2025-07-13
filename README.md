@@ -25,6 +25,7 @@ This program uses the fact that the same ad will likely never be run across the 
 ## Instructions
 Set up a systemd service with the following env variables
 - proxyAddress - your Socks5 proxy
-- accessToken - the password required for adding or deleting podcasts
 - baseAddress - The url you can use to access the mp3 podcast files
 - podcastStoragePath - (optional) directory where processed podcast files are stored (defaults to ./Podcasts)
+- AUTH_USERNAME - username for web interface login (defaults to "admin")
+- AUTH_PASSWORD - password for web interface login (defaults to "password")

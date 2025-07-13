@@ -25,7 +25,13 @@ public class RedirectService
         {
             const string sql = @"SELECT * FROM Redirects WHERE OriginalLink = @url";
             using var connection = await _databaseService.GetConnectionAsync();
-            return await connection.QueryFirstOrDefaultAsync<RedirectLink>(sql, new { url });
+            var redirectLink = await connection.QueryFirstOrDefaultAsync<RedirectLink>(sql, new { url });
+            if (redirectLink.Id is null)
+            {
+                return null;
+            }
+
+            return redirectLink;
         }
         catch (Exception ex)
         {
@@ -38,9 +44,9 @@ public class RedirectService
     {
         try
         {
-            const string sql = @"SELECT * FROM Redirects WHERE Id = @id";
+            const string sql = @"SELECT Id, OriginalLink FROM Redirects WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
-            var result = await connection.QueryFirstOrDefaultAsync<RedirectLink?>(sql, new { id = id.ToString().ToLowerInvariant() });
+            var result = await connection.QueryFirstAsync<RedirectLink?>(sql, new { id = id.ToString().ToLowerInvariant() });
 
             if (!result.HasValue)
             {

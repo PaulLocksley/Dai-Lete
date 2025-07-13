@@ -206,7 +206,12 @@ public class XmlService
 
                 var url = baseUri + match.Groups[2].Value;
                 var redirectLink = await _redirectService.GetOrCreateRedirectLinkAsync(url);
-                node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}{match.Groups[3].Value}";
+                if (string.IsNullOrEmpty(redirectLink.Id))
+                {
+                    throw new InvalidOperationException($"Failed to generate redirect ID for URL: {url}");
+                }
+                _logger.LogDebug("Created redirect link for {Url} with ID {Id}", url, redirectLink.Id);
+                node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}&{match.Groups[3].Value}";
             }
         }
         catch (Exception ex)

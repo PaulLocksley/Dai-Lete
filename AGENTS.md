@@ -14,6 +14,7 @@
 - **Models**: Data models (Podcast, PodcastMetadata, etc.)
 - **Services**: Business logic (PodcastServices, XmlService, etc.)
 - **Repositories**: Data access layer with SQLite/Dapper
+- **Metrics**: Separate server on port 4011 for Prometheus metrics endpoint
 
 ## Code Style Guidelines
 - **Namespace**: Use `Dai_Lete.{Folder}` pattern (underscores, not hyphens)

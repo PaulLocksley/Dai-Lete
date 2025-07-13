@@ -1,7 +1,6 @@
 using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
-using Dai_Lete.Middleware;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
@@ -10,10 +9,13 @@ using OpenTelemetry.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Create separate metrics server
+var metricsBuilder = WebApplication.CreateBuilder(args);
+metricsBuilder.WebHost.UseUrls("http://localhost:4011");
+
 // Add configuration options
 builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
-builder.Services.Configure<MetricsIpFilterOptions>(builder.Configuration.GetSection(MetricsIpFilterOptions.SectionName));
 
 // Add authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -37,8 +39,17 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.WebHost.UseSentry();
 
-// Add OpenTelemetry metrics
-builder.Services.AddOpenTelemetry()
+// Add OpenTelemetry metrics (shared between main and metrics servers)
+var openTelemetryBuilder = builder.Services.AddOpenTelemetry()
+    .WithMetrics(builder =>
+    {
+        builder
+            .AddMeter("Dai_Lete.Podcast")
+            .AddPrometheusExporter();
+    });
+
+// Configure metrics server
+metricsBuilder.Services.AddOpenTelemetry()
     .WithMetrics(builder =>
     {
         builder
@@ -109,14 +120,11 @@ app.UseStaticFiles(new StaticFileOptions
 });
 app.UseRouting();
 
-app.UseMiddleware<MetricsIpFilterMiddleware>();
-
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapRazorPages();
 app.MapControllers();
-app.MapPrometheusScrapingEndpoint();
 
 // Initialize database
 var databaseService = app.Services.GetRequiredService<IDatabaseService>();
@@ -127,5 +135,12 @@ SqLite.Initialize(databaseService);
 var feedCacheService = app.Services.GetRequiredService<FeedCacheService>();
 FeedCache.Initialize(feedCacheService);
 await FeedCache.buildCache();
+
+// Build and configure metrics server
+var metricsApp = metricsBuilder.Build();
+metricsApp.MapPrometheusScrapingEndpoint();
+
+// Start metrics server in background
+_ = Task.Run(() => metricsApp.RunAsync());
 
 app.Run();

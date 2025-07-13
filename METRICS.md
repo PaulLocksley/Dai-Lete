@@ -29,7 +29,7 @@ Add the following to your `prometheus.yml`:
 scrape_configs:
   - job_name: 'dai-lete'
     static_configs:
-      - targets: ['localhost:5000']  # Adjust port as needed
+      - targets: ['localhost:4011']  # Metrics server port
     metrics_path: '/metrics'
     scrape_interval: 30s
 ```
@@ -113,59 +113,11 @@ sum(rate(podcast_time_saved_seconds_total[5m])) * 60
 
 ## Metrics Endpoint Security
 
-The metrics endpoint at `/metrics` is protected by IP filtering to prevent unauthorized access.
-
-### Configuration
-
-Configure allowed IPs in `appsettings.json`:
-
-```json
-{
-  "MetricsIpFilter": {
-    "AllowedIps": [
-      "127.0.0.1",
-      "::1",
-      "10.0.0.0/8",
-      "172.16.0.0/12", 
-      "192.168.0.0/16",
-      "YOUR_PROMETHEUS_SERVER_IP"
-    ]
-  }
-}
-```
-
-### Supported IP Formats
-
-- **Single IPs**: `192.168.1.100`, `127.0.0.1`
-- **CIDR ranges**: `10.0.0.0/8`, `192.168.0.0/16`
-- **IPv6**: `::1`, `2001:db8::/32`
-
-### Traefik Integration
-
-Since you're using Traefik, the middleware properly handles:
-- `X-Forwarded-For` header (uses first IP in chain)
-- `X-Real-IP` header
-- Direct connection IP as fallback
-
-### Default Configuration
-
-**Production** (`appsettings.json`):
-- Localhost (`127.0.0.1`, `::1`)
-- Private networks (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`)
-
-**Development** (`appsettings.Development.json`):
-- All IPs allowed (`0.0.0.0/0`) for testing
-
-### Access Denied Response
-
-Unauthorized IPs receive:
-- HTTP 403 Forbidden
-- Response body: "Access denied"
-- Logged as warning with client IP
+The metrics endpoint at `/metrics` runs on a separate server (port 4011) with no IP filtering restrictions.
 
 ## Metrics Endpoint
 
-The metrics are available at: `http://your-dai-lete-instance/metrics` (IP restricted)
+The metrics are available at: `http://your-dai-lete-instance:4011/metrics` (separate port)
 
 Example output:
 ```

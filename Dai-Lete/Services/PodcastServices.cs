@@ -316,6 +316,18 @@ public class PodcastServices
             while (!process.HasExited) { Thread.Sleep(100); }
             process.Kill();
 
+            // Calculate processed duration and record metrics
+            var processedDuration = await GetAudioDurationAsync(finalFile);
+            var timeSaved = originalDuration - processedDuration;
+            
+            if (timeSaved > TimeSpan.Zero)
+            {
+                var podcastName = await GetPodcastNameAsync(podcastId);
+                _metricsService.RecordTimeSaved(podcastId, episodeId, timeSaved, podcastName);
+                _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for episode {EpisodeId}", 
+                    timeSaved.TotalSeconds, episodeId);
+            }
+
             File.Delete(preLocal);
             File.Delete(workingLocal);
             File.Delete(preRemote);

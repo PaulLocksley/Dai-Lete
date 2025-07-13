@@ -264,21 +264,21 @@ public class PodcastServices
             workingR.Seek(oneP, SeekOrigin.Begin);
             var audioLength = await GetAudioDurationAsync(workingLocal);
             var bytesPerSecond = workingLLength / audioLength.TotalSeconds;
-            var fiveSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 5);
+            var threeSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 3);
 
             var headers = new byte[oneP];
             workingL.ReadExactly(headers, 0, oneP);
             outStream.Write(headers);
             var dropedFramesSinceLastHit = 0;
-            var bufferL = new byte[fiveSecondByteWindow];
-            var bufferR = new byte[fiveSecondByteWindow];
-            while (workingL.Position + fiveSecondByteWindow < workingLLength && workingR.Position + fiveSecondByteWindow < workingRLength)
+            var bufferL = new byte[threeSecondByteWindow];
+            var bufferR = new byte[threeSecondByteWindow];
+            while (workingL.Position + threeSecondByteWindow < workingLLength && workingR.Position + threeSecondByteWindow < workingRLength)
             {
                 bufferL.AsSpan().Clear();
                 bufferR.AsSpan().Clear();
                 var initialR = workingR.Position;
-                workingL.ReadExactly(bufferL, 0, fiveSecondByteWindow);
-                workingR.ReadExactly(bufferR, 0, fiveSecondByteWindow);
+                workingL.ReadExactly(bufferL, 0, threeSecondByteWindow);
+                workingR.ReadExactly(bufferR, 0, threeSecondByteWindow);
                 var spanL = bufferL.AsSpan();
                 var spanR = bufferR.AsSpan();
                 if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
@@ -288,21 +288,25 @@ public class PodcastServices
                     continue;
                 }
                 // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
-                var lookAheadCap = Math.Min((initialR + (fiveSecondByteWindow * 48) + (fiveSecondByteWindow * dropedFramesSinceLastHit)), workingRLength);
+                var lookAheadCap = Math.Min((initialR + (threeSecondByteWindow * 80) + (threeSecondByteWindow * dropedFramesSinceLastHit)), workingRLength);
                 var readDistance = (int)(lookAheadCap - initialR);
                 var bigBufferR = new byte[readDistance];
                 workingR.Seek(initialR + 1, SeekOrigin.Begin);
                 var bytesRead = workingR.Read(bigBufferR, 0, readDistance);
                 var lookAheadSPan = bigBufferR.AsSpan(0, bytesRead);
-                for (var offset = 1; offset < lookAheadSPan.Length - fiveSecondByteWindow; offset++)
+                var matchFound = false;
+                for (var offset = 1; offset < lookAheadSPan.Length - threeSecondByteWindow; offset++)
                 {
-                    var candidate = lookAheadSPan.Slice(offset, fiveSecondByteWindow);
+                    var candidate = lookAheadSPan.Slice(offset, threeSecondByteWindow);
                     if (!spanL.SequenceEqual(candidate)) continue;
                     outStream.Write(bufferL);
                     dropedFramesSinceLastHit = 0;
+                    matchFound = true;
+                    workingR.Seek(initialR + offset, SeekOrigin.Begin);
                     break;
                 }
 
+                if (matchFound){ continue; }
                 dropedFramesSinceLastHit++;
                 workingR.Seek(initialR, SeekOrigin.Begin);
             }

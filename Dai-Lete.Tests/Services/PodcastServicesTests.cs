@@ -131,7 +131,7 @@ public class PodcastServicesTests
         var finalDuration = await service.GetAudioDurationAsync(finalFile);
         var timeSaved = originalMaxDuration - finalDuration.TotalSeconds;
 
-        Assert.True(timeSaved >= 10 && timeSaved <= 25,
+        Assert.True(timeSaved >= 10 && timeSaved <= 20,
             $"Expected 10-15 seconds removed, but {timeSaved:F2} seconds were removed. Original: {originalMaxDuration:F2}s, Final: {finalDuration.TotalSeconds:F2}s");
         //this should be 12 seconds removed max ideally. working on it.
         Directory.Delete(workingDirectory, true);

@@ -18,7 +18,7 @@ public class IndexModel : PageModel
         _configManager = configManager;
     }
 
-    public object InUri { get; set; }
+    public object InUri { get; set; } = string.Empty;
     public string BaseAddress => _configManager.GetBaseAddress();
 
     public void OnGet()

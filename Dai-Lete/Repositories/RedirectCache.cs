@@ -22,14 +22,16 @@ public class RedirectCache
 
         if (!_cache.TryGetValue(cacheKey, out string? cachedHtml))
         {
-            var record = await _redirectService.GetRedirectLinkAsync(id);
-            if (record == null)
+            try
+            {
+                var record = await _redirectService.GetRedirectLinkAsync(id);
+                var client = _httpClientFactory.CreateClient();
+                cachedHtml = await client.GetStringAsync(record.OriginalLink);
+            }
+            catch (ArgumentException)
             {
                 return "<html><body><h1>Redirect not found</h1></body></html>";
             }
-            
-            var client = _httpClientFactory.CreateClient();
-            cachedHtml = await client.GetStringAsync(record.OriginalLink);
 
             var cacheOptions = new MemoryCacheEntryOptions()
                 .SetAbsoluteExpiration(TimeSpan.FromHours(12));

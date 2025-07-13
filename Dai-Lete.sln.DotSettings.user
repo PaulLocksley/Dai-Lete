@@ -1,30 +1,33 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AArgumentNullException_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FAppData_003FRoaming_003FJetBrains_003FRider2024_002E3_003Fresharper_002Dhost_003FSourcesCache_003F7fcc41fe48c43f71d1476329de953fce8565fcc5dbf3c8c6fdb81c216b19c4_003FArgumentNullException_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
+	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AEnumerable_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002Econfig_003FJetBrains_003FRider2025_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003Faf6b9d3165db48e6bac75a6a25d91aaf78a00_003F33_003F08968ebc_003FEnumerable_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AExceptionDispatchInfo_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002Econfig_003FJetBrains_003FRider2025_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F5c4db1fab42f4241a73de1d10eb7f168d19e00_003Fe4_003F3fd0159e_003FExceptionDispatchInfo_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003APageModel_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FAppData_003FRoaming_003FJetBrains_003FRider2024_002E3_003Fresharper_002Dhost_003FSourcesCache_003F3eab2556a6e1dddc71dd7dd41efa5153ec50a4b7394940f26c808fcbb5dec9d_003FPageModel_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AServiceProvider_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002Econfig_003FJetBrains_003FRider2025_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F6ca08994d07143c6a5b60d790d52af2e30800_003Fed_003F569a110b_003FServiceProvider_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AStackFrameIterator_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002Econfig_003FJetBrains_003FRider2025_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F5c4db1fab42f4241a73de1d10eb7f168d19e00_003F06_003Fd4ccb8b3_003FStackFrameIterator_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003ATask_00601_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003F_002Econfig_003FJetBrains_003FRider2025_002E1_003Fresharper_002Dhost_003FDecompilerCache_003Fdecompiler_003F8a1e3702ab574b2ba09e5584b8b53cbcb2e200_003F6d_003F1551036d_003FTask_00601_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
 	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=7020124F_002D9FFC_002D4AC3_002D8F3D_002DAAB8E0240759_002Ff_003AXmlNode_002Ecs_002Fl_003A_002E_002E_003F_002E_002E_003FAppData_003FRoaming_003FJetBrains_003FRider2024_002E3_003Fresharper_002Dhost_003FSourcesCache_003F145e1b21186d59d8b1c166f867c940c92194cfec25c925fe8911210497b_003FXmlNode_002Ecs/@EntryIndexedValue">ForceIncluded</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=35c1ab0f_002D9637_002D4dfa_002D92f9_002D66994e47b1bb/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="PromptAsync_WithSampleTranscript_ShouldGenerateSummary" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=171b7fa8_002D909b_002D4530_002D97cb_002D92fa5e65271d/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds #3" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
-    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.LanguageModelServiceIntegrationTests.PromptAsync_WithSampleTranscript_ShouldGenerateSummary&lt;/TestId&gt;
+    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=3fb6d5b2_002D3f9d_002D4a5e_002D8255_002D9ac23928875a/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds #4" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
+	
+	
+	
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=6f4184ae_002Dcaf1_002D4c39_002Dab9e_002Dbc9d893f5694/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=7603a133_002Dc677_002D44a1_002D8c21_002D26bd23408a7f/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="All tests from Solution" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
-  &lt;Solution /&gt;
-&lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=c38041ce_002Dc14d_002D4932_002Db962_002Deb9a89ba6478/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="PromptAsync_WithSampleTranscript_ShouldGenerateSummary #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
-  &lt;TestAncestor&gt;
-    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
-  &lt;/TestAncestor&gt;
-&lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=f1c2be3e_002Dc603_002D4990_002D9663_002D2a7610866a59/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+	
+	
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=f1c2be3e_002Dc603_002D4990_002D9663_002D2a7610866a59/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
     &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
   &lt;/TestAncestor&gt;

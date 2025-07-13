@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Xml;
 using System.Diagnostics;
 using System.Net;
@@ -261,36 +262,48 @@ public class PodcastServices
         var oneP = 1024; //read hopefully all meta data and file headers. 
         var twoP = oneP;
         workingR.Seek(oneP, SeekOrigin.Begin);
-        var byteWindow = 120000;
+        var audioLength = await GetAudioDurationAsync(workingLocal);
+        var bytesPerSecond =  workingLLength / audioLength.TotalSeconds;
+        var fiveSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 5);
 
         var headers = new byte[oneP];
         workingL.Read(headers, 0, oneP);
         outStream.Write(headers);
-
-        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+        var dropedFramesSinceLastHit = 0;
+        var bufferL = new byte[fiveSecondByteWindow];
+        var bufferR = new byte[fiveSecondByteWindow];
+        while (workingL.Position + fiveSecondByteWindow < workingLLength && workingR.Position + fiveSecondByteWindow < workingRLength)
         {
-            var bufferL = new byte[byteWindow];
-            var bufferR = new byte[byteWindow];
+            bufferL.AsSpan().Clear();
+            bufferR.AsSpan().Clear();
             var initialR = workingR.Position;
-            workingL.Read(bufferL, 0, byteWindow);
-            workingR.Read(bufferR, 0, byteWindow);
-            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
+            workingL.Read(bufferL, 0, fiveSecondByteWindow);
+            workingR.Read(bufferR, 0, fiveSecondByteWindow);
+            var spanL = bufferL.AsSpan();
+            var spanR = bufferR.AsSpan();
+            if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
             {
                 outStream.Write(bufferL);
+                dropedFramesSinceLastHit = 0;
                 continue;
             }
-
-            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
+            // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
+            var lookAheadCap = Math.Min((initialR + (fiveSecondByteWindow * 48) + (fiveSecondByteWindow * dropedFramesSinceLastHit)),workingRLength) ;
+            var readDistance = (int)(lookAheadCap - initialR);
+            var bigBufferR = new byte[readDistance];
+            workingR.Seek(initialR+1, SeekOrigin.Begin);
+            var bytesRead = workingR.Read(bigBufferR, 0, readDistance);
+            var lookAheadSPan = bigBufferR.AsSpan(0, bytesRead);
+            for (var offset = 1; offset < lookAheadSPan.Length - fiveSecondByteWindow; offset++)
             {
-                workingR.Seek(i, SeekOrigin.Begin);
-                workingR.Read(bufferR, 0, byteWindow);
-                if (bufferL.SequenceEqual(bufferR))
-                {
-                    outStream.Write(bufferL);
-                    break;
-                }
+                var candidate = lookAheadSPan.Slice(offset, fiveSecondByteWindow);
+                if (!spanL.SequenceEqual(candidate)) continue;
+                outStream.Write(bufferL);
+                dropedFramesSinceLastHit = 0;
+                break;
             }
 
+            dropedFramesSinceLastHit++;
             workingR.Seek(initialR, SeekOrigin.Begin);
         }
         outStream.Close();

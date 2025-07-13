@@ -1,14 +1,16 @@
-FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS base
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
 EXPOSE 80
 EXPOSE 443
+EXPOSE 4011
+
 RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg
 ENV baseAddress=pod.locksley.dev
 ENV accessToken=12345
 ENV proxyAddress=prx.locksley.dev
 
 
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 WORKDIR /src
 COPY ["Dai-Lete/Dai-Lete.csproj", "Dai-Lete/"]
 RUN dotnet restore "Dai-Lete/Dai-Lete.csproj"

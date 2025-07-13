@@ -1,8 +1,5 @@
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS base
 WORKDIR /app
-EXPOSE 80
-EXPOSE 443
-EXPOSE 4011
 
 RUN apt-get -y update && apt-get -y upgrade && apt-get install -y ffmpeg
 ENV baseAddress=pod.locksley.dev
@@ -24,4 +21,5 @@ RUN dotnet publish "Dai-Lete.csproj" -c Release -o /app/publish /p:UseAppHost=fa
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+EXPOSE 4011
 ENTRYPOINT ["dotnet", "Dai-Lete.dll"]

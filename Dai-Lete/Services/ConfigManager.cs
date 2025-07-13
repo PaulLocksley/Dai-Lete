@@ -31,7 +31,7 @@ public class ConfigManager
     {
         try
         {
-            return _configuration["Auth:Username"] ?? Environment.GetEnvironmentVariable("AUTH_USERNAME") ?? "admin";
+            return Environment.GetEnvironmentVariable("AUTH_USERNAME") ?? _configuration["Auth:Username"] ?? "admin";
         }
         catch (Exception ex)
         {
@@ -44,7 +44,7 @@ public class ConfigManager
     {
         try
         {
-            return _configuration["Auth:Password"] ?? Environment.GetEnvironmentVariable("AUTH_PASSWORD") ?? "password";
+            return Environment.GetEnvironmentVariable("AUTH_PASSWORD") ?? _configuration["Auth:Password"] ?? "password";
         }
         catch (Exception ex)
         {

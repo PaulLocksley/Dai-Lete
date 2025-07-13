@@ -11,12 +11,22 @@
     &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.LanguageModelServiceIntegrationTests.PromptAsync_WithSampleTranscript_ShouldGenerateSummary&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=6f4184ae_002Dcaf1_002D4c39_002Dab9e_002Dbc9d893f5694/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
 	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=7603a133_002Dc677_002D44a1_002D8c21_002D26bd23408a7f/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="All tests from Solution" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;Solution /&gt;
 &lt;/SessionState&gt;</s:String>
-	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=c38041ce_002Dc14d_002D4932_002Db962_002Deb9a89ba6478/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="PromptAsync_WithSampleTranscript_ShouldGenerateSummary #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=c38041ce_002Dc14d_002D4932_002Db962_002Deb9a89ba6478/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" Name="PromptAsync_WithSampleTranscript_ShouldGenerateSummary #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
   &lt;TestAncestor&gt;
-    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.LanguageModelServiceIntegrationTests.PromptAsync_WithSampleTranscript_ShouldGenerateSummary&lt;/TestId&gt;
+    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
+  &lt;/TestAncestor&gt;
+&lt;/SessionState&gt;</s:String>
+	<s:String x:Key="/Default/Environment/UnitTesting/UnitTestSessionStore/Sessions/=f1c2be3e_002Dc603_002D4990_002D9663_002D2a7610866a59/@EntryIndexedValue">&lt;SessionState ContinuousTestingMode="0" IsActive="True" Name="ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds #2" xmlns="urn:schemas-jetbrains-com:jetbrains-ut-session"&gt;
+  &lt;TestAncestor&gt;
+    &lt;TestId&gt;xUnit::C9355328-7835-4C38-AFEA-986D022382F3::net9.0::Dai_Lete.Tests.Services.PodcastServicesTests.ProcessDownloadedEpisodeAsync_WithTestAudioFiles_ShouldRemove10To15Seconds&lt;/TestId&gt;
   &lt;/TestAncestor&gt;
 &lt;/SessionState&gt;</s:String>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=Lete/@EntryIndexedValue">True</s:Boolean></wpf:ResourceDictionary>

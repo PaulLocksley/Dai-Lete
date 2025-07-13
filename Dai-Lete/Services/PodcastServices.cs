@@ -228,8 +228,9 @@ public class PodcastServices
                 return (int)new FileInfo(finalFile).Length;
             }
 
-            string ffmpegArgsL = $" -y -i \"{preLocal}\" \"{workingLocal}\"";
-            string ffmpegArgsR = $" -y -i \"{preRemote}\" \"{workingRemote}\"";
+            // Convert to consistent low-quality mono WAV to reduce compression variance
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingRemote}\"";
             string ffmpegArgsFinal = $"-y -i \"{processedFile}\" \"{finalFile}\"";
 
 
@@ -249,89 +250,212 @@ public class PodcastServices
             {
                 Thread.Sleep(100);
             }
+            //this is taking forever or not matching. think about it overnight.
+                    process.Kill();
+        var workingL = File.OpenRead(workingLocal);
+        var workingR = File.OpenRead(workingRemote);
+        var workingLLength = new FileInfo(workingLocal).Length;
+        var workingRLength = new FileInfo(workingRemote).Length;
+        var outStream = File.Create(processedFile);
 
-            process.Kill();
+        var oneP = 1024; //read hopefully all meta data and file headers. 
+        var twoP = oneP;
+        workingR.Seek(oneP, SeekOrigin.Begin);
+        var byteWindow = 120000;
 
-            var localDuration = await GetAudioDurationAsync(workingLocal);
-            var remoteDuration = await GetAudioDurationAsync(workingRemote);
+        var headers = new byte[oneP];
+        workingL.Read(headers, 0, oneP);
+        outStream.Write(headers);
 
-            var workingL = File.OpenRead(workingLocal);
-            var workingR = File.OpenRead(workingRemote);
-            var workingLLength = new FileInfo(workingLocal).Length;
-            var workingRLength = new FileInfo(workingRemote).Length;
-            var outStream = File.Create(processedFile);
-
-            var localBytesPerSecond = workingLLength / localDuration.TotalSeconds;
-            var remoteBytesPerSecond = workingRLength / remoteDuration.TotalSeconds;
-            var searchWindowSeconds = 120.0;
-
-            var oneP = 1024; //read hopefully all meta data and file headers. 
-
-
-            var twoP = oneP;
-            workingR.Seek(oneP, SeekOrigin.Begin);
-            var byteWindow = 120000;
-
-            var headers = new byte[oneP];
-            workingL.ReadExactly(headers, 0, oneP);
-            outStream.Write(headers);
-
-            while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+        while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+        {
+            var bufferL = new byte[byteWindow];
+            var bufferR = new byte[byteWindow];
+            var initialR = workingR.Position;
+            workingL.Read(bufferL, 0, byteWindow);
+            workingR.Read(bufferR, 0, byteWindow);
+            if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
             {
-                var bufferL = new byte[byteWindow];
-                var bufferR = new byte[byteWindow];
-                var initialR = workingR.Position;
-                workingL.ReadExactly(bufferL, 0, byteWindow);
-                workingR.ReadExactly(bufferR, 0, byteWindow);
+                outStream.Write(bufferL);
+                continue;
+            }
 
-
-                if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0))
+            for (long i = initialR + 1; i + byteWindow < workingRLength; i++)//todo: time based window match
+            {
+                workingR.Seek(i, SeekOrigin.Begin);
+                workingR.Read(bufferR, 0, byteWindow);
+                if (bufferL.SequenceEqual(bufferR))
                 {
                     outStream.Write(bufferL);
-                    continue;
+                    break;
                 }
-
-                var currentTimeL = (workingL.Position - oneP) / localBytesPerSecond;
-                var expectedRemotePosition = (long)(currentTimeL * remoteBytesPerSecond) + oneP;
-                var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
-                var searchStart = Math.Max(oneP, expectedRemotePosition - maxSearchBytes / 2);
-                var searchEnd = Math.Min(workingRLength - byteWindow, expectedRemotePosition + maxSearchBytes / 2);
-
-                _logger.LogDebug("Searching for match at time {Time}s, expected remote pos {Pos}, window {Start}-{End}",
-                    currentTimeL, expectedRemotePosition, searchStart, searchEnd);
-
-                for (long i = searchStart; i <= searchEnd; i += byteWindow / 10)
-                {
-                    workingR.Seek(i, SeekOrigin.Begin);
-                    workingR.ReadExactly(bufferR, 0, byteWindow);
-                    if (bufferL.SequenceEqual(bufferR))
-                    {
-                        outStream.Write(bufferL);
-                        break;
-                    }
-                }
-
-                workingR.Seek(initialR, SeekOrigin.Begin);
             }
-            outStream.Close();
-            workingL.Close();
-            workingR.Close();
-            //one more process :) 
 
-            process.StartInfo.Arguments = ffmpegArgsFinal;
-            process.Start();
-            while (!process.HasExited) { Thread.Sleep(100); }
-            process.Kill();
-
-            File.Delete(preLocal);
-            File.Delete(workingLocal);
-            File.Delete(preRemote);
-            File.Delete(workingRemote);
-            File.Delete(processedFile);
-            _logger.LogInformation($"Completed processing {episodeId}");
-
-
-            return (int)new FileInfo(finalFile).Length;
+            workingR.Seek(initialR, SeekOrigin.Begin);
+        }
+        outStream.Close();
+        workingL.Close();
+        workingR.Close();
+        //one more process :) 
+        
+        process.StartInfo.Arguments = ffmpegArgsFinal;
+        process.Start();
+        while (!process.HasExited) { Thread.Sleep(100); }
+        process.Kill();
+        
+        File.Delete(preLocal);
+        File.Delete(workingLocal);
+        File.Delete(preRemote);
+        File.Delete(workingRemote);
+        File.Delete(processedFile);
+        
+        _logger.LogInformation($"Completed processing {episodeId}");
+        return (int)new FileInfo(finalFile).Length;
+            // process.Kill();
+            // var workingL = File.OpenRead(workingLocal);
+            // var workingR = File.OpenRead(workingRemote);
+            // var workingLLength = new FileInfo(workingLocal).Length;
+            // var workingRLength = new FileInfo(workingRemote).Length;
+            // var outStream = File.Create(processedFile);
+            //
+            // var oneP = 1024; //read hopefully all meta data and file headers. 
+            //
+            // var twoP = oneP;
+            // workingR.Seek(oneP, SeekOrigin.Begin);
+            // var byteWindow = 8192; // Smaller window for better sync detection
+            //
+            // var headers = new byte[oneP];
+            // workingL.ReadExactly(headers, 0, oneP);
+            // outStream.Write(headers);
+            //
+            // // Calculate bytes per second for time-based positioning
+            // var localDuration = await GetAudioDurationAsync(workingLocal);
+            // var remoteDuration = await GetAudioDurationAsync(workingRemote);
+            // var localBytesPerSecond = (workingLLength - oneP) / localDuration.TotalSeconds;
+            // var remoteBytesPerSecond = (workingRLength - oneP) / remoteDuration.TotalSeconds;
+            //
+            // // Track segments to remove (start and end times in seconds)
+            // var segmentsToRemove = new List<(double start, double end)>();
+            // var currentSegmentStart = -1.0;
+            // var baseSearchWindowSeconds = 60.0; // 1 minute base search window for better precision
+            // var lastMatchTime = 0.0;
+            //
+            // while (workingL.Position + byteWindow < workingLLength && workingR.Position + byteWindow < workingRLength)
+            // {
+            //     var bufferL = new byte[byteWindow];
+            //     var bufferR = new byte[byteWindow];
+            //     var initialR = workingR.Position;
+            //     workingL.Read(bufferL, 0, byteWindow);
+            //     workingR.Read(bufferR, 0, byteWindow);
+            //     
+            //     // Calculate current time position in local file
+            //     var currentTimeL = (workingL.Position - oneP - byteWindow) / localBytesPerSecond;
+            //     
+            //     if (bufferL.SequenceEqual(bufferR) || bufferL.All(x => x == 0) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //     {
+            //         // Found exact match - close any open removal segment
+            //         if (currentSegmentStart >= 0)
+            //         {
+            //             segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //             currentSegmentStart = -1.0;
+            //         }
+            //         lastMatchTime = 0.0;
+            //         continue;
+            //     }
+            //
+            //     // Search forward for match within time window
+            //     var searchWindowSeconds = baseSearchWindowSeconds + lastMatchTime;
+            //     var maxSearchBytes = (long)(searchWindowSeconds * remoteBytesPerSecond);
+            //     var searchEnd = Math.Min(workingRLength - byteWindow, initialR + maxSearchBytes);
+            //     
+            //     bool matchFound = false;
+            //     // Smaller step size for better sync detection
+            //     for (long i = initialR + 1; i <= searchEnd; i += byteWindow / 4)
+            //     {
+            //         workingR.Seek(i, SeekOrigin.Begin);
+            //         workingR.Read(bufferR, 0, byteWindow);
+            //         if (bufferL.SequenceEqual(bufferR) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //         {
+            //             // Found match - close any open removal segment
+            //             if (currentSegmentStart >= 0)
+            //             {
+            //                 segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //                 currentSegmentStart = -1.0;
+            //             }
+            //             workingR.Seek(i + byteWindow, SeekOrigin.Begin);
+            //             lastMatchTime = 0.0;
+            //             matchFound = true;
+            //             break;
+            //         }
+            //     }
+            //     
+            //     if (!matchFound)
+            //     {
+            //         // No match found - start tracking removal segment if not already started
+            //         if (currentSegmentStart < 0)
+            //         {
+            //             currentSegmentStart = currentTimeL;
+            //         }
+            //         lastMatchTime += byteWindow / localBytesPerSecond;
+            //         
+            //         // If we've been searching for a while, try a wider search to find re-sync
+            //         if (lastMatchTime > 20.0) // After 20 seconds of no matches, do wider search
+            //         {
+            //             var wideSearchEnd = Math.Min(workingRLength - byteWindow, initialR + (long)(180.0 * remoteBytesPerSecond)); // 3 minute wide search
+            //             for (long j = initialR + byteWindow; j <= wideSearchEnd; j += byteWindow)
+            //             {
+            //                 workingR.Seek(j, SeekOrigin.Begin);
+            //                 workingR.Read(bufferR, 0, byteWindow);
+            //                 if (bufferL.SequenceEqual(bufferR) || CalculateByteSimilarity(bufferL, bufferR) > 0.85)
+            //                 {
+            //                     // Found re-sync! Close current removal segment and continue from here
+            //                     segmentsToRemove.Add((currentSegmentStart, currentTimeL));
+            //                     currentSegmentStart = -1.0;
+            //                     workingR.Seek(j + byteWindow, SeekOrigin.Begin);
+            //                     lastMatchTime = 0.0;
+            //                     matchFound = true;
+            //                     break;
+            //                 }
+            //             }
+            //         }
+            //         
+            //         if (!matchFound)
+            //         {
+            //             workingR.Seek(initialR, SeekOrigin.Begin);
+            //         }
+            //     }
+            // }
+            //
+            // // Close any final open removal segment
+            // if (currentSegmentStart >= 0)
+            // {
+            //     var finalTime = (workingL.Position - oneP) / localBytesPerSecond;
+            //     segmentsToRemove.Add((currentSegmentStart, finalTime));
+            // }
+            //
+            // workingL.Close();
+            // workingR.Close();
+            // outStream.Close();
+            //
+            // // Log the segments we're removing for debugging
+            // _logger.LogInformation("Found {Count} segments to remove:", segmentsToRemove.Count);
+            // foreach (var (start, end) in segmentsToRemove)
+            // {
+            //     _logger.LogInformation("  Remove: {Start:F2}s - {End:F2}s ({Duration:F2}s)", start, end, end - start);
+            // }
+            //
+            // // Now edit the original file to remove the identified segments
+            // await RemoveSegmentsFromOriginalFile(preLocal, finalFile, segmentsToRemove);
+            //
+            //
+            // File.Delete(preLocal);
+            // File.Delete(workingLocal);
+            // File.Delete(preRemote);
+            // File.Delete(workingRemote);
+            // File.Delete(processedFile);
+            //
+            // _logger.LogInformation($"Completed processing {episodeId}");
+            // return (int)new FileInfo(finalFile).Length;
         }
         catch (Exception ex)
         {
@@ -346,7 +470,7 @@ public class PodcastServices
         return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.mp3");
     }
 
-    private async Task<TimeSpan> GetAudioDurationAsync(string filePath)
+    public async Task<TimeSpan> GetAudioDurationAsync(string filePath)
     {
         try
         {
@@ -387,6 +511,7 @@ public class PodcastServices
         }
     }
 
+
     private async Task<string?> GetPodcastNameAsync(Guid podcastId)
     {
         try
@@ -411,5 +536,89 @@ public class PodcastServices
         }
 
         return null;
+    }
+
+    private static double CalculateByteSimilarity(byte[] buffer1, byte[] buffer2)
+    {
+        if (buffer1.Length != buffer2.Length) return 0.0;
+        
+        // Fast sampling approach - check every 4th byte for better accuracy
+        int sampleStep = 4;
+        int matchingBytes = 0;
+        int totalSamples = 0;
+        
+        for (int i = 0; i < buffer1.Length; i += sampleStep)
+        {
+            // Allow moderate differences (within 6 values) to account for encoding differences
+            if (Math.Abs(buffer1[i] - buffer2[i]) <= 6)
+            {
+                matchingBytes++;
+            }
+            totalSamples++;
+        }
+        
+        return totalSamples > 0 ? (double)matchingBytes / totalSamples : 0.0;
+    }
+
+    private async Task RemoveSegmentsFromOriginalFile(string inputFile, string outputFile, List<(double start, double end)> segmentsToRemove)
+    {
+        if (segmentsToRemove.Count == 0)
+        {
+            // No segments to remove, just copy the original file
+            File.Copy(inputFile, outputFile, true);
+            return;
+        }
+
+        // Build ffmpeg filter to remove segments
+        var filterParts = new List<string>();
+        var currentTime = 0.0;
+        
+        foreach (var (start, end) in segmentsToRemove.OrderBy(s => s.start))
+        {
+            if (start > currentTime)
+            {
+                // Include segment from currentTime to start
+                filterParts.Add($"between(t,{currentTime:F3},{start:F3})");
+            }
+            currentTime = Math.Max(currentTime, end);
+        }
+        
+        // Include final segment if there's audio after the last removal
+        var totalDuration = await GetAudioDurationAsync(inputFile);
+        if (currentTime < totalDuration.TotalSeconds)
+        {
+            filterParts.Add($"between(t,{currentTime:F3},{totalDuration.TotalSeconds:F3})");
+        }
+        
+        if (filterParts.Count == 0)
+        {
+            // Everything was removed, create empty file
+            File.WriteAllBytes(outputFile, Array.Empty<byte>());
+            return;
+        }
+        
+        var filter = string.Join("+", filterParts);
+        var ffmpegArgs = $"-y -i \"{inputFile}\" -af \"aselect='{filter}',asetpts=N/SR/TB\" \"{outputFile}\"";
+        
+        var process = new Process
+        {
+            StartInfo = new ProcessStartInfo
+            {
+                FileName = "ffmpeg",
+                Arguments = ffmpegArgs,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardError = true
+            }
+        };
+        
+        process.Start();
+        await process.WaitForExitAsync();
+        
+        if (process.ExitCode != 0)
+        {
+            var error = await process.StandardError.ReadToEndAsync();
+            throw new InvalidOperationException($"ffmpeg failed to remove segments: {error}");
+        }
     }
 }

@@ -252,78 +252,78 @@ public class PodcastServices
                 Thread.Sleep(100);
             }
             //this is taking forever or not matching. think about it overnight.
-                    process.Kill();
-        var workingL = File.OpenRead(workingLocal);
-        var workingR = File.OpenRead(workingRemote);
-        var workingLLength = new FileInfo(workingLocal).Length;
-        var workingRLength = new FileInfo(workingRemote).Length;
-        var outStream = File.Create(processedFile);
+            process.Kill();
+            var workingL = File.OpenRead(workingLocal);
+            var workingR = File.OpenRead(workingRemote);
+            var workingLLength = new FileInfo(workingLocal).Length;
+            var workingRLength = new FileInfo(workingRemote).Length;
+            var outStream = File.Create(processedFile);
 
-        var oneP = 1024; //read hopefully all meta data and file headers. 
-        var twoP = oneP;
-        workingR.Seek(oneP, SeekOrigin.Begin);
-        var audioLength = await GetAudioDurationAsync(workingLocal);
-        var bytesPerSecond =  workingLLength / audioLength.TotalSeconds;
-        var fiveSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 5);
+            var oneP = 1024; //read hopefully all meta data and file headers. 
+            var twoP = oneP;
+            workingR.Seek(oneP, SeekOrigin.Begin);
+            var audioLength = await GetAudioDurationAsync(workingLocal);
+            var bytesPerSecond = workingLLength / audioLength.TotalSeconds;
+            var fiveSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 5);
 
-        var headers = new byte[oneP];
-        workingL.Read(headers, 0, oneP);
-        outStream.Write(headers);
-        var dropedFramesSinceLastHit = 0;
-        var bufferL = new byte[fiveSecondByteWindow];
-        var bufferR = new byte[fiveSecondByteWindow];
-        while (workingL.Position + fiveSecondByteWindow < workingLLength && workingR.Position + fiveSecondByteWindow < workingRLength)
-        {
-            bufferL.AsSpan().Clear();
-            bufferR.AsSpan().Clear();
-            var initialR = workingR.Position;
-            workingL.Read(bufferL, 0, fiveSecondByteWindow);
-            workingR.Read(bufferR, 0, fiveSecondByteWindow);
-            var spanL = bufferL.AsSpan();
-            var spanR = bufferR.AsSpan();
-            if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
+            var headers = new byte[oneP];
+            workingL.ReadExactly(headers, 0, oneP);
+            outStream.Write(headers);
+            var dropedFramesSinceLastHit = 0;
+            var bufferL = new byte[fiveSecondByteWindow];
+            var bufferR = new byte[fiveSecondByteWindow];
+            while (workingL.Position + fiveSecondByteWindow < workingLLength && workingR.Position + fiveSecondByteWindow < workingRLength)
             {
-                outStream.Write(bufferL);
-                dropedFramesSinceLastHit = 0;
-                continue;
-            }
-            // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
-            var lookAheadCap = Math.Min((initialR + (fiveSecondByteWindow * 48) + (fiveSecondByteWindow * dropedFramesSinceLastHit)),workingRLength) ;
-            var readDistance = (int)(lookAheadCap - initialR);
-            var bigBufferR = new byte[readDistance];
-            workingR.Seek(initialR+1, SeekOrigin.Begin);
-            var bytesRead = workingR.Read(bigBufferR, 0, readDistance);
-            var lookAheadSPan = bigBufferR.AsSpan(0, bytesRead);
-            for (var offset = 1; offset < lookAheadSPan.Length - fiveSecondByteWindow; offset++)
-            {
-                var candidate = lookAheadSPan.Slice(offset, fiveSecondByteWindow);
-                if (!spanL.SequenceEqual(candidate)) continue;
-                outStream.Write(bufferL);
-                dropedFramesSinceLastHit = 0;
-                break;
-            }
+                bufferL.AsSpan().Clear();
+                bufferR.AsSpan().Clear();
+                var initialR = workingR.Position;
+                workingL.ReadExactly(bufferL, 0, fiveSecondByteWindow);
+                workingR.ReadExactly(bufferR, 0, fiveSecondByteWindow);
+                var spanL = bufferL.AsSpan();
+                var spanR = bufferR.AsSpan();
+                if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
+                {
+                    outStream.Write(bufferL);
+                    dropedFramesSinceLastHit = 0;
+                    continue;
+                }
+                // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
+                var lookAheadCap = Math.Min((initialR + (fiveSecondByteWindow * 48) + (fiveSecondByteWindow * dropedFramesSinceLastHit)), workingRLength);
+                var readDistance = (int)(lookAheadCap - initialR);
+                var bigBufferR = new byte[readDistance];
+                workingR.Seek(initialR + 1, SeekOrigin.Begin);
+                var bytesRead = workingR.Read(bigBufferR, 0, readDistance);
+                var lookAheadSPan = bigBufferR.AsSpan(0, bytesRead);
+                for (var offset = 1; offset < lookAheadSPan.Length - fiveSecondByteWindow; offset++)
+                {
+                    var candidate = lookAheadSPan.Slice(offset, fiveSecondByteWindow);
+                    if (!spanL.SequenceEqual(candidate)) continue;
+                    outStream.Write(bufferL);
+                    dropedFramesSinceLastHit = 0;
+                    break;
+                }
 
-            dropedFramesSinceLastHit++;
-            workingR.Seek(initialR, SeekOrigin.Begin);
-        }
-        outStream.Close();
-        workingL.Close();
-        workingR.Close();
-        //one more process :) 
-        
-        process.StartInfo.Arguments = ffmpegArgsFinal;
-        process.Start();
-        while (!process.HasExited) { Thread.Sleep(100); }
-        process.Kill();
-        
-        File.Delete(preLocal);
-        File.Delete(workingLocal);
-        File.Delete(preRemote);
-        File.Delete(workingRemote);
-        File.Delete(processedFile);
-        
-        _logger.LogInformation($"Completed processing {episodeId}");
-        return (int)new FileInfo(finalFile).Length;
+                dropedFramesSinceLastHit++;
+                workingR.Seek(initialR, SeekOrigin.Begin);
+            }
+            outStream.Close();
+            workingL.Close();
+            workingR.Close();
+            //one more process :) 
+
+            process.StartInfo.Arguments = ffmpegArgsFinal;
+            process.Start();
+            while (!process.HasExited) { Thread.Sleep(100); }
+            process.Kill();
+
+            File.Delete(preLocal);
+            File.Delete(workingLocal);
+            File.Delete(preRemote);
+            File.Delete(workingRemote);
+            File.Delete(processedFile);
+
+            _logger.LogInformation($"Completed processing {episodeId}");
+            return (int)new FileInfo(finalFile).Length;
             // process.Kill();
             // var workingL = File.OpenRead(workingLocal);
             // var workingR = File.OpenRead(workingRemote);
@@ -554,12 +554,12 @@ public class PodcastServices
     private static double CalculateByteSimilarity(byte[] buffer1, byte[] buffer2)
     {
         if (buffer1.Length != buffer2.Length) return 0.0;
-        
+
         // Fast sampling approach - check every 4th byte for better accuracy
         int sampleStep = 4;
         int matchingBytes = 0;
         int totalSamples = 0;
-        
+
         for (int i = 0; i < buffer1.Length; i += sampleStep)
         {
             // Allow moderate differences (within 6 values) to account for encoding differences
@@ -569,7 +569,7 @@ public class PodcastServices
             }
             totalSamples++;
         }
-        
+
         return totalSamples > 0 ? (double)matchingBytes / totalSamples : 0.0;
     }
 
@@ -585,7 +585,7 @@ public class PodcastServices
         // Build ffmpeg filter to remove segments
         var filterParts = new List<string>();
         var currentTime = 0.0;
-        
+
         foreach (var (start, end) in segmentsToRemove.OrderBy(s => s.start))
         {
             if (start > currentTime)
@@ -595,24 +595,24 @@ public class PodcastServices
             }
             currentTime = Math.Max(currentTime, end);
         }
-        
+
         // Include final segment if there's audio after the last removal
         var totalDuration = await GetAudioDurationAsync(inputFile);
         if (currentTime < totalDuration.TotalSeconds)
         {
             filterParts.Add($"between(t,{currentTime:F3},{totalDuration.TotalSeconds:F3})");
         }
-        
+
         if (filterParts.Count == 0)
         {
             // Everything was removed, create empty file
             File.WriteAllBytes(outputFile, Array.Empty<byte>());
             return;
         }
-        
+
         var filter = string.Join("+", filterParts);
         var ffmpegArgs = $"-y -i \"{inputFile}\" -af \"aselect='{filter}',asetpts=N/SR/TB\" \"{outputFile}\"";
-        
+
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
@@ -624,10 +624,10 @@ public class PodcastServices
                 RedirectStandardError = true
             }
         };
-        
+
         process.Start();
         await process.WaitForExitAsync();
-        
+
         if (process.ExitCode != 0)
         {
             var error = await process.StandardError.ReadToEndAsync();

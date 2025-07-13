@@ -77,21 +77,21 @@ public class DatabaseService : IDatabaseService
     {
         var createPodcastsTable = @"
             CREATE TABLE IF NOT EXISTS Podcasts (
-                Id TEXT PRIMARY KEY,
+                Id GUID PRIMARY KEY,
                 InUri TEXT NOT NULL
             )";
 
         var createEpisodesTable = @"
             CREATE TABLE IF NOT EXISTS Episodes (
-                Id TEXT PRIMARY KEY,
-                PodcastId TEXT NOT NULL,
+                Id GUID PRIMARY KEY,
+                PodcastId GUID NOT NULL,
                 FileSize INTEGER,
                 FOREIGN KEY (PodcastId) REFERENCES Podcasts(Id)
             )";
 
         var createRedirectsTable = @"
             CREATE TABLE IF NOT EXISTS Redirects (
-                Id TEXT PRIMARY KEY,
+                Id GUID PRIMARY KEY,
                 OriginalLink TEXT NOT NULL
             )";
 

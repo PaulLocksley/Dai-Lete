@@ -99,7 +99,7 @@ public class PodcastServicesTests
         var episodeId = "test-episode";
         var testDataPath = Path.Combine(Path.GetDirectoryName(typeof(PodcastServicesTests).Assembly.Location)!, "TestData");
         var workingDirectory = Path.Combine(Path.GetTempPath(), podcastId.ToString());
-        
+
         Directory.CreateDirectory(workingDirectory);
         Directory.CreateDirectory(testDataPath);
 
@@ -110,7 +110,7 @@ public class PodcastServicesTests
 
         if (!File.Exists(localTestFile) || !File.Exists(remoteTestFile))
         {
-            Assert.True(false, "Test data files local.mp3 and remote.mp3 must exist in TestData directory");
+            Assert.Fail("Test data files local.mp3 and remote.mp3 must exist in TestData directory");
             return;
         }
 
@@ -131,7 +131,7 @@ public class PodcastServicesTests
         var finalDuration = await service.GetAudioDurationAsync(finalFile);
         var timeSaved = originalMaxDuration - finalDuration.TotalSeconds;
 
-        Assert.True(timeSaved >= 10 && timeSaved <= 25, 
+        Assert.True(timeSaved >= 10 && timeSaved <= 25,
             $"Expected 10-15 seconds removed, but {timeSaved:F2} seconds were removed. Original: {originalMaxDuration:F2}s, Final: {finalDuration.TotalSeconds:F2}s");
         //this should be 12 seconds removed max ideally. working on it.
         Directory.Delete(workingDirectory, true);

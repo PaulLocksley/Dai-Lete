@@ -227,7 +227,8 @@ public class XmlService
                     throw new InvalidOperationException($"Failed to generate redirect ID for URL: {url}");
                 }
                 _logger.LogDebug("Created redirect link for {Url} with ID {Id}", url, redirectLink.Id);
-                node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}&{match.Groups[3].Value}";
+                node.Value = $"{match.Groups[1].Value}/redirect?id={redirectLink.Id}\" ";
+                //dumping this for now. &{match.Groups[3].Value}";
             }
         }
         catch (Exception ex)

@@ -25,9 +25,25 @@ public class RedirectService
         {
             const string sql = @"SELECT * FROM Redirects WHERE OriginalLink = @url";
             using var connection = await _databaseService.GetConnectionAsync();
-            var redirectLink = await connection.QueryFirstOrDefaultAsync<RedirectLink>(sql, new { url });
-            if (redirectLink.Id is null)
+            var redirectLink = await connection.QueryFirstOrDefaultAsync<RedirectLink?>(sql, new { url });
+            if (!redirectLink.HasValue)
             {
+                _logger.LogWarning("Redirect not found for URL: {Url}", url);
+                
+                // Dump all redirects for debugging
+                const string dumpSql = @"SELECT Id, OriginalLink FROM Redirects LIMIT 10";
+                var allRedirects = await connection.QueryAsync(dumpSql);
+                _logger.LogWarning("Current redirects in database (first 10):");
+                foreach (var redirect in allRedirects)
+                {
+                    _logger.LogWarning("  ID: {Id}, URL: {Url}", (string)redirect.Id, (string)redirect.OriginalLink);
+                }
+                
+                // Also check total count
+                const string countSql = @"SELECT COUNT(*) FROM Redirects";
+                var totalCount = await connection.QuerySingleAsync<int>(countSql);
+                _logger.LogWarning("Total redirects in database: {Count}", totalCount);
+                
                 return null;
             }
 
@@ -44,16 +60,46 @@ public class RedirectService
     {
         try
         {
+            var searchId = id.ToString().ToLowerInvariant();
+            _logger.LogInformation("RedirectService: Searching for ID '{SearchId}' in database", searchId);
+            
             const string sql = @"SELECT Id, OriginalLink FROM Redirects WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
-            var result = await connection.QueryFirstAsync<RedirectLink?>(sql, new { id = id.ToString().ToLowerInvariant() });
+            var result = await connection.QueryFirstOrDefaultAsync<RedirectLink>(sql, new { id = searchId });
 
-            if (!result.HasValue)
+            if (string.IsNullOrEmpty(result.Id))
             {
+                _logger.LogWarning("Redirect not found for ID: {Id}", id);
+                
+                // Dump all redirects for debugging
+                const string dumpSql = @"SELECT Id, OriginalLink FROM Redirects LIMIT 10";
+                var allRedirects = await connection.QueryAsync(dumpSql);
+                _logger.LogWarning("Current redirects in database (first 10):");
+                foreach (var redirect in allRedirects)
+                {
+                    _logger.LogWarning("  ID: '{Id}' (length: {Length}), URL: {Url}", (string)redirect.Id, ((string)redirect.Id).Length, (string)redirect.OriginalLink);
+                }
+                
+                // Also check total count
+                const string countSql = @"SELECT COUNT(*) FROM Redirects";
+                var totalCount = await connection.QuerySingleAsync<int>(countSql);
+                _logger.LogWarning("Total redirects in database: {Count}", totalCount);
+                
+                // Check if we're looking for the right format
+                _logger.LogWarning("Looking for ID in lowercase format: '{LowercaseId}' (length: {Length})", searchId, searchId.Length);
+                
+                // Check for exact match with different case or formatting
+                const string searchSql = @"SELECT Id, OriginalLink FROM Redirects WHERE LOWER(Id) = LOWER(@searchId)";
+                var caseInsensitiveResult = await connection.QueryFirstOrDefaultAsync(searchSql, new { searchId });
+                if (caseInsensitiveResult != null)
+                {
+                    _logger.LogWarning("Found case-insensitive match: ID '{FoundId}' vs searched '{SearchId}'", (string)caseInsensitiveResult.Id, searchId);
+                }
+                
                 throw new ArgumentException($"No redirect found with ID: {id}", nameof(id));
             }
 
-            return result.Value;
+            return result;
         }
         catch (Exception ex) when (!(ex is ArgumentException))
         {

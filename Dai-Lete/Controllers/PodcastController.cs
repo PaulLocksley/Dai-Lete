@@ -90,7 +90,7 @@ public class PodcastController : Controller
 
             foreach (var eId in episodeIds)
             {
-                await DeletePodcastEpisode(id, eId);
+                await DeleteEpisodeInternal(connection, id, eId);
             }
 
             _logger.LogInformation("Deleting podcast {PodcastId}", id);
@@ -153,6 +153,57 @@ public class PodcastController : Controller
         }
     }
 
+    private async Task<bool> DeleteEpisodeInternal(IDbConnection connection, Guid podcastId, string episodeGuid)
+    {
+        if (string.IsNullOrWhiteSpace(episodeGuid))
+        {
+            _logger.LogWarning("Episode GUID is required for deletion");
+            return false;
+        }
+
+        try
+        {
+            const string sql = @"DELETE FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
+            var deletedRows = await connection.ExecuteAsync(sql, new { pid = podcastId, eid = episodeGuid });
+
+            if (deletedRows != 1)
+            {
+                _logger.LogWarning("Episode not found in database: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+                return false;
+            }
+
+            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.mp3");
+            if (System.IO.File.Exists(filepath))
+            {
+                System.IO.File.Delete(filepath);
+                _logger.LogInformation("Deleted episode file and database record: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+            }
+            else
+            {
+                _logger.LogWarning("Episode file not found but database record deleted: {FilePath}", filepath);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to delete episode {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
+            return false;
+        }
+    }
+
+    private async Task<bool> DeleteEpisodeInternal(Guid podcastId, string episodeGuid)
+    {
+        if (!FeedCache.feedCache.ContainsKey(podcastId))
+        {
+            _logger.LogWarning("Podcast not found in cache: {PodcastId}", podcastId);
+            return false;
+        }
+
+        using var connection = await _databaseService.GetConnectionAsync();
+        return await DeleteEpisodeInternal(connection, podcastId, episodeGuid);
+    }
+
     [HttpDelete("DeleteEpisode")]
     public async Task<IActionResult> DeletePodcastEpisode(Guid podcastId, string episodeGuid)
     {
@@ -168,39 +219,15 @@ public class PodcastController : Controller
             return NotFound("Podcast not known to server");
         }
 
-        try
+        var success = await DeleteEpisodeInternal(podcastId, episodeGuid);
+        
+        if (!success)
         {
-            using var connection = await _databaseService.GetConnectionAsync();
-            const string sql = @"DELETE FROM Episodes WHERE Id = @eid AND PodcastId = @pid";
-            var deletedRows = await connection.ExecuteAsync(sql, new { pid = podcastId, eid = episodeGuid });
-
-            if (deletedRows != 1)
-            {
-                _logger.LogWarning("Episode not found in database: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
-                return NotFound("Episode not found in database");
-            }
-
-            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.wav");
-            if (System.IO.File.Exists(filepath))
-            {
-                System.IO.File.Delete(filepath);
-                _logger.LogInformation("Deleted episode file and database record: {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
-            }
-            else
-            {
-                _logger.LogWarning("Episode file not found but database record deleted: {FilePath}", filepath);
-            }
-
-            return Ok("Episode deleted successfully");
+            return NotFound("Episode not found in database");
         }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to delete episode {EpisodeGuid} for podcast {PodcastId}", episodeGuid, podcastId);
-            return Problem(
-                detail: "An internal server error occurred while deleting episode",
-                statusCode: 500,
-                title: "Internal Server Error");
-        }
+
+        await FeedCache.UpdatePodcastCache(podcastId);
+        return Ok("Episode deleted successfully");
     }
 
     [HttpGet("list-podcasts")]

@@ -282,7 +282,7 @@ public class PodcastServices
             var dropedFramesSinceLastHit = 0;
             var bufferL = new byte[threeSecondByteWindow];
             var bufferR = new byte[threeSecondByteWindow];
-            while (workingL.Position + threeSecondByteWindow < workingLLength && workingR.Position + threeSecondByteWindow < workingRLength)
+            while (workingL.Position + threeSecondByteWindow <= workingLLength && workingR.Position + threeSecondByteWindow <= workingRLength)
             {
                 bufferL.AsSpan().Clear();
                 bufferR.AsSpan().Clear();

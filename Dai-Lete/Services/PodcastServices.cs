@@ -229,10 +229,10 @@ public class PodcastServices
                 return (int)new FileInfo(finalFile).Length;
             }
 
-            // Convert to consistent low-quality mono WAV to reduce compression variance
-            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingLocal}\"";
-            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingRemote}\"";
-            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" \"{finalFile}\"";
+            // Convert to consistent high-quality stereo WAV for better audio processing
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{workingRemote}\"";
+            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" -c:a mp3 -b:a 256k -ar 48000 -ac 2 \"{finalFile}\"";
 
 
             Process process = new Process();
@@ -244,6 +244,12 @@ public class PodcastServices
             {
                 Thread.Sleep(100);
             }
+            
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", process.ExitCode);
+                return -1;
+            }
 
             process.StartInfo.Arguments = ffmpegArgsR;
             process.Start();
@@ -251,8 +257,12 @@ public class PodcastServices
             {
                 Thread.Sleep(100);
             }
-            //this is taking forever or not matching. think about it overnight.
-            process.Kill();
+            
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("FFmpeg failed to convert remote file with exit code: {ExitCode}", process.ExitCode);
+                return -1;
+            }
             var workingL = File.OpenRead(workingLocal);
             var workingR = File.OpenRead(workingRemote);
             var workingLLength = new FileInfo(workingLocal).Length;
@@ -318,7 +328,12 @@ public class PodcastServices
             process.StartInfo.Arguments = ffmpegArgsFinal;
             process.Start();
             while (!process.HasExited) { Thread.Sleep(100); }
-            process.Kill();
+            
+            if (process.ExitCode != 0)
+            {
+                _logger.LogError("FFmpeg failed to create final file with exit code: {ExitCode}", process.ExitCode);
+                return -1;
+            }
 
             // Calculate processed duration and record metrics
             var processedDuration = await GetAudioDurationAsync(finalFile);

@@ -34,6 +34,7 @@ public class XmlService
             string metaDataDescription = string.Empty;
             var processedEpisodes = new List<PodcastEpisodeMetadata>();
             var nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
+            bool hasItunesBlock = false;
 
             using var connection = await _databaseService.GetConnectionAsync();
 
@@ -69,6 +70,7 @@ public class XmlService
                         {
                             case "title":
                                 metaDataName = item.InnerText;
+                                item.InnerText = $"[DAI-LETE] {item.InnerText}";
                                 break;
                             case "description":
                                 metaDataDescription = item.InnerText;
@@ -81,6 +83,13 @@ public class XmlService
                                 {
                                     metaDataImageUrl = imageUri;
                                 }
+                                break;
+                            case "itunes:new-feed-url":
+                                item.ParentNode?.RemoveChild(item);
+                                break;
+                            case "itunes:block":
+                                item.InnerText = "yes";
+                                hasItunesBlock = true;
                                 break;
                         }
                         continue;
@@ -131,6 +140,13 @@ public class XmlService
                     {
                         nonProcessedEpisodes.Add(GetEpisodeMetaData(item, podcast));
                     }
+                }
+
+                if (!hasItunesBlock)
+                {
+                    var itunesBlockElement = rssFeed.CreateElement("itunes", "block", "http://www.itunes.com/dtds/podcast-1.0.dtd");
+                    itunesBlockElement.InnerText = "yes";
+                    node.AppendChild(itunesBlockElement);
                 }
             }
 

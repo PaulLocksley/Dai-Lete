@@ -6,3 +6,5 @@ riderModule.iml
 Dai-Lete/Podcasts.sqlite
 .idea/.idea.Dai-Lete/.idea/sqldialects.xml
 /Dai-Lete/Podcasts/
+Dai-Lete.Tests/TestData/real.local.mp3
+Dai-Lete.Tests/TestData/real.remote.mp3

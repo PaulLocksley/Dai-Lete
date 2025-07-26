@@ -267,9 +267,11 @@ public class PodcastServices
             var audioLength = await GetAudioDurationAsync(workingLocal);
             var bytesPerSecond = workingLLength / audioLength.TotalSeconds;
             var threeSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 3);
+            threeSecondByteWindow = (threeSecondByteWindow / 2) * 2; //align to samples, hopefully not far off.
 
             var qualityBytesPerSecond = qualityLLength / audioLength.TotalSeconds;
             var qualityThreeSecondByteWindow = (int)Math.Ceiling(qualityBytesPerSecond * 3);
+            qualityThreeSecondByteWindow = (qualityThreeSecondByteWindow / 4) * 4; // as above.
 
             var headers = new byte[headerBytes];
             qualityL.ReadExactly(headers, 0, headerBytes);
@@ -309,7 +311,7 @@ public class PodcastServices
                     continue;
                 }
                 // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
-                var lookAheadCap = Math.Min((initialR + (threeSecondByteWindow * 80) + (threeSecondByteWindow * dropedFramesSinceLastHit)), workingRLength);
+                var lookAheadCap = Math.Min(initialR + ((threeSecondByteWindow / 3) * _configManager.GetLookAheadDistance()) + (threeSecondByteWindow * dropedFramesSinceLastHit), workingRLength);
                 var readDistance = (int)(lookAheadCap - initialR);
                 var bigBufferR = new byte[readDistance];
                 workingR.Seek(initialR + 1, SeekOrigin.Begin);

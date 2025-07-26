@@ -27,6 +27,14 @@ public class ConfigManager
         }
     }
 
+    public int GetLookAheadDistance()
+    {
+        if (int.TryParse(Environment.GetEnvironmentVariable("lookAheadDistance"), out var envValue))
+            return envValue;
+        if (int.TryParse(_configuration["lookAheadDistance"], out var configValue))
+            return configValue;
+        return 60 * 8;
+    }
     public string GetUsername()
     {
         try

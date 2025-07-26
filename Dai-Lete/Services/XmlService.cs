@@ -59,7 +59,8 @@ public class XmlService
             await ProcessPreProcessingInstructionsAsync(rssFeed, $"{podcast.InUri.Scheme}://{podcast.InUri.Host}" +
                                                                (podcast.InUri.IsDefaultPort ? "" : $":{podcast.InUri.Port}"));
             var root = rssFeed.DocumentElement;
-
+            XmlNode? redirectNode = null;
+            XmlNode? channelNode = null;
             foreach (XmlElement node in root.ChildNodes)
             {
                 foreach (XmlElement item in node.ChildNodes)
@@ -85,7 +86,8 @@ public class XmlService
                                 }
                                 break;
                             case "itunes:new-feed-url":
-                                item.ParentNode?.RemoveChild(item);
+                                channelNode = node;
+                                redirectNode = item;
                                 break;
                             case "itunes:block":
                                 item.InnerText = "yes";
@@ -149,7 +151,10 @@ public class XmlService
                     node.AppendChild(itunesBlockElement);
                 }
             }
-
+            if (redirectNode is not null && channelNode is not null)
+            {
+                channelNode.RemoveChild(redirectNode);
+            }
             FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                     metaDataImageUrl, metaDataDescription,
                                                                     processedEpisodes, nonProcessedEpisodes));

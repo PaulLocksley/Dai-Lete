@@ -118,8 +118,6 @@ public class PodcastServicesTests
         File.Copy(remoteTestFile, remoteWorkingFile, true);
 
         var originalLocalDuration = await service.GetAudioDurationAsync(localWorkingFile);
-        var originalRemoteDuration = await service.GetAudioDurationAsync(remoteWorkingFile);
-        var originalMaxDuration = Math.Max(originalLocalDuration.TotalSeconds, originalRemoteDuration.TotalSeconds);
 
         var result = await service.ProcessDownloadedEpisodeAsync(podcastId, episodeId);
 
@@ -129,10 +127,10 @@ public class PodcastServicesTests
         Assert.True(File.Exists(finalFile), "Final processed file should exist");
 
         var finalDuration = await service.GetAudioDurationAsync(finalFile);
-        var timeSaved = originalMaxDuration - finalDuration.TotalSeconds;
+        var timeSaved = originalLocalDuration.TotalSeconds - finalDuration.TotalSeconds;
 
         Assert.True(timeSaved >= 10 && timeSaved <= 20,
-            $"Expected 10-15 seconds removed, but {timeSaved:F2} seconds were removed. Original: {originalMaxDuration:F2}s, Final: {finalDuration.TotalSeconds:F2}s");
+            $"Expected 10-15 seconds removed, but {timeSaved:F2} seconds were removed. Original: {originalLocalDuration.TotalSeconds:F2}s, Final: {finalDuration.TotalSeconds:F2}s");
         //this should be 12 seconds removed max ideally. working on it.
         Directory.Delete(workingDirectory, true);
         if (Directory.Exists(Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString())))

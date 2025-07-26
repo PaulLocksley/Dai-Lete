@@ -6,6 +6,8 @@ using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Utilities;
 using Dapper;
+using Microsoft.AspNetCore.Razor.TagHelpers;
+using System.Text;
 
 namespace Dai_Lete.Services;
 
@@ -186,7 +188,7 @@ public class PodcastServices
 
         try
         {
-            _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId}", episodeId, podcastId);
+            _logger.LogInformation("Processing downloaded episode {EpisodeId} for podcast {PodcastId} - 0% complete", episodeId, podcastId);
 
             var workingDirectory = Path.Combine(Path.GetTempPath(), podcastId.ToString());
             var originalFilePath = Path.Combine(workingDirectory, $"{episodeId}.local");
@@ -199,10 +201,11 @@ public class PodcastServices
             var originalDuration = await GetAudioDurationAsync(originalFilePath);
             _logger.LogDebug("Original episode duration: {Duration} for {EpisodeId}", originalDuration, episodeId);
 
-            _logger.LogInformation($"Starting to process {episodeId}");
+            _logger.LogInformation("Starting to process {EpisodeId}", episodeId);
 
             var preLocal = Path.Combine(workingDirectory, $"{episodeId}.local");
             var workingLocal = $"{preLocal}.wav";
+            var qualityLocal = $"{preLocal}.high.wav";
             var preRemote = Path.Combine(workingDirectory, $"{episodeId}.remote");
             var workingRemote = $"{preRemote}.wav";
             var processedFile = Path.Combine(workingDirectory, $"{episodeId}processed.wav");
@@ -223,77 +226,85 @@ public class PodcastServices
 
             if (FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
             {
-                _logger.LogWarning($"Episodes are identical {episodeId}");
+                _logger.LogWarning("Episodes are identical {EpisodeId} - 100% complete: No processing needed", episodeId);
                 File.Move(preLocal, finalFile);
                 File.Delete(preRemote);
                 return (int)new FileInfo(finalFile).Length;
             }
 
-            // Convert to consistent high-quality stereo WAV for better audio processing
-            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{workingLocal}\"";
-            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{workingRemote}\"";
+
+
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingRemote}\"";
+            string ffmpegArgsQualityL = $" -y -i \"{preLocal}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{qualityLocal}\"";
             string ffmpegArgsFinal = $"-y -i \"{processedFile}\" -c:a mp3 -b:a 256k -ar 48000 -ac 2 \"{finalFile}\"";
 
 
-            Process process = new Process();
-            process.StartInfo.FileName = "ffmpeg";
-            process.StartInfo.Arguments = ffmpegArgsL;
-            process.EnableRaisingEvents = false;
-            process.Start();
-            while (!process.HasExited)
+            foreach (var arguments in new string[] { ffmpegArgsL, ffmpegArgsQualityL, ffmpegArgsR })
             {
-                Thread.Sleep(100);
-            }
-            
-            if (process.ExitCode != 0)
-            {
-                _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", process.ExitCode);
+                var ffmpeg_result = await RunFfmpegAsync(arguments, $"Working on {podcastId}:{episodeId}");
+                if (ffmpeg_result == 0)
+                {
+                    continue;
+                }
+                _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", ffmpeg_result);
                 return -1;
             }
 
-            process.StartInfo.Arguments = ffmpegArgsR;
-            process.Start();
-            while (!process.HasExited)
-            {
-                Thread.Sleep(100);
-            }
-            
-            if (process.ExitCode != 0)
-            {
-                _logger.LogError("FFmpeg failed to convert remote file with exit code: {ExitCode}", process.ExitCode);
-                return -1;
-            }
+
+
+            var qualityL = File.OpenRead(qualityLocal);
+            var qualityLLength = new FileInfo(qualityLocal).Length;
             var workingL = File.OpenRead(workingLocal);
-            var workingR = File.OpenRead(workingRemote);
             var workingLLength = new FileInfo(workingLocal).Length;
+            var workingR = File.OpenRead(workingRemote);
             var workingRLength = new FileInfo(workingRemote).Length;
             var outStream = File.Create(processedFile);
 
-            var oneP = 1024; //read hopefully all meta data and file headers. 
-            var twoP = oneP;
-            workingR.Seek(oneP, SeekOrigin.Begin);
+            var headerBytes = 1024; //read hopefully all meta data and file headers. 
+            workingR.Seek(headerBytes, SeekOrigin.Begin);
+            workingL.Seek(headerBytes, SeekOrigin.Begin);
             var audioLength = await GetAudioDurationAsync(workingLocal);
             var bytesPerSecond = workingLLength / audioLength.TotalSeconds;
             var threeSecondByteWindow = (int)Math.Ceiling(bytesPerSecond * 3);
 
-            var headers = new byte[oneP];
-            workingL.ReadExactly(headers, 0, oneP);
+            var qualityBytesPerSecond = qualityLLength / audioLength.TotalSeconds;
+            var qualityThreeSecondByteWindow = (int)Math.Ceiling(qualityBytesPerSecond * 3);
+
+            var headers = new byte[headerBytes];
+            qualityL.ReadExactly(headers, 0, headerBytes);
             outStream.Write(headers);
             var dropedFramesSinceLastHit = 0;
+
             var bufferL = new byte[threeSecondByteWindow];
             var bufferR = new byte[threeSecondByteWindow];
-            while (workingL.Position + threeSecondByteWindow <= workingLLength && workingR.Position + threeSecondByteWindow <= workingRLength)
+            var qualityBufferL = new byte[qualityThreeSecondByteWindow];
+            var chunkCount = 0;
+
+            while (workingL.Position + threeSecondByteWindow <= workingLLength &&
+                    workingR.Position + threeSecondByteWindow <= workingRLength &&
+                    qualityL.Position + qualityThreeSecondByteWindow <= qualityLLength)
             {
                 bufferL.AsSpan().Clear();
                 bufferR.AsSpan().Clear();
+                qualityBufferL.AsSpan().Clear();
                 var initialR = workingR.Position;
                 workingL.ReadExactly(bufferL, 0, threeSecondByteWindow);
                 workingR.ReadExactly(bufferR, 0, threeSecondByteWindow);
+                qualityL.ReadExactly(qualityBufferL, 0, qualityThreeSecondByteWindow);
                 var spanL = bufferL.AsSpan();
                 var spanR = bufferR.AsSpan();
+                chunkCount++;
+                if (chunkCount % 10 == 0)
+                {
+                    var percentComplete = (double)workingL.Position / workingLLength * 100;
+                    _logger.LogInformation("Episode {EpisodeId} - {Percent:F1}% complete: Processed {BytesProcessed:N0}/{TotalBytes:N0} bytes",
+                        episodeId, percentComplete, workingL.Position, workingLLength);
+                }
+
                 if (spanL.SequenceEqual(spanR) || bufferL.All(x => x == 0))
                 {
-                    outStream.Write(bufferL);
+                    outStream.Write(qualityBufferL);
                     dropedFramesSinceLastHit = 0;
                     continue;
                 }
@@ -309,51 +320,51 @@ public class PodcastServices
                 {
                     var candidate = lookAheadSPan.Slice(offset, threeSecondByteWindow);
                     if (!spanL.SequenceEqual(candidate)) continue;
-                    outStream.Write(bufferL);
+                    outStream.Write(qualityBufferL);
                     dropedFramesSinceLastHit = 0;
                     matchFound = true;
                     workingR.Seek(initialR + offset, SeekOrigin.Begin);
                     break;
                 }
 
-                if (matchFound){ continue; }
+                if (matchFound) { continue; }
                 dropedFramesSinceLastHit++;
                 workingR.Seek(initialR, SeekOrigin.Begin);
             }
             outStream.Close();
             workingL.Close();
             workingR.Close();
-            //one more process :) 
+            qualityL.Close();
 
-            process.StartInfo.Arguments = ffmpegArgsFinal;
-            process.Start();
-            while (!process.HasExited) { Thread.Sleep(100); }
-            
-            if (process.ExitCode != 0)
+
+
+            var result = await RunFfmpegAsync(ffmpegArgsFinal, $"final processing for {podcastId}:{episodeId}");
+            if (result != 0)
             {
-                _logger.LogError("FFmpeg failed to create final file with exit code: {ExitCode}", process.ExitCode);
+                _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", result);
                 return -1;
             }
 
             // Calculate processed duration and record metrics
             var processedDuration = await GetAudioDurationAsync(finalFile);
             var timeSaved = originalDuration - processedDuration;
-            
+
             if (timeSaved > TimeSpan.Zero)
             {
                 var podcastName = await GetPodcastNameAsync(podcastId);
                 _metricsService.RecordTimeSaved(podcastId, episodeId, timeSaved, podcastName);
-                _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for episode {EpisodeId}", 
+                _logger.LogInformation("Recorded {TimeSaved:F1} seconds saved for episode {EpisodeId}",
                     timeSaved.TotalSeconds, episodeId);
             }
 
             File.Delete(preLocal);
+            File.Delete(qualityLocal);
             File.Delete(workingLocal);
             File.Delete(preRemote);
             File.Delete(workingRemote);
             File.Delete(processedFile);
 
-            _logger.LogInformation($"Completed processing {episodeId}");
+            _logger.LogInformation("Episode {EpisodeId} - 100% complete: Processing finished successfully", episodeId);
             return (int)new FileInfo(finalFile).Length;
         }
         catch (Exception ex)
@@ -363,11 +374,6 @@ public class PodcastServices
         }
     }
 
-    private string GetEpisodeFilePath(Guid podcastId, string episodeId)
-    {
-        var baseDir = _configManager.GetPodcastStoragePath();
-        return Path.Combine(baseDir, podcastId.ToString(), $"{episodeId}.mp3");
-    }
 
     public async Task<TimeSpan> GetAudioDurationAsync(string filePath)
     {
@@ -437,87 +443,46 @@ public class PodcastServices
         return null;
     }
 
-    private static double CalculateByteSimilarity(byte[] buffer1, byte[] buffer2)
+    private async Task<int> RunFfmpegAsync(string arguments, string description)
     {
-        if (buffer1.Length != buffer2.Length) return 0.0;
-
-        // Fast sampling approach - check every 4th byte for better accuracy
-        int sampleStep = 4;
-        int matchingBytes = 0;
-        int totalSamples = 0;
-
-        for (int i = 0; i < buffer1.Length; i += sampleStep)
-        {
-            // Allow moderate differences (within 6 values) to account for encoding differences
-            if (Math.Abs(buffer1[i] - buffer2[i]) <= 6)
-            {
-                matchingBytes++;
-            }
-            totalSamples++;
-        }
-
-        return totalSamples > 0 ? (double)matchingBytes / totalSamples : 0.0;
-    }
-
-    private async Task RemoveSegmentsFromOriginalFile(string inputFile, string outputFile, List<(double start, double end)> segmentsToRemove)
-    {
-        if (segmentsToRemove.Count == 0)
-        {
-            // No segments to remove, just copy the original file
-            File.Copy(inputFile, outputFile, true);
-            return;
-        }
-
-        // Build ffmpeg filter to remove segments
-        var filterParts = new List<string>();
-        var currentTime = 0.0;
-
-        foreach (var (start, end) in segmentsToRemove.OrderBy(s => s.start))
-        {
-            if (start > currentTime)
-            {
-                // Include segment from currentTime to start
-                filterParts.Add($"between(t,{currentTime:F3},{start:F3})");
-            }
-            currentTime = Math.Max(currentTime, end);
-        }
-
-        // Include final segment if there's audio after the last removal
-        var totalDuration = await GetAudioDurationAsync(inputFile);
-        if (currentTime < totalDuration.TotalSeconds)
-        {
-            filterParts.Add($"between(t,{currentTime:F3},{totalDuration.TotalSeconds:F3})");
-        }
-
-        if (filterParts.Count == 0)
-        {
-            // Everything was removed, create empty file
-            File.WriteAllBytes(outputFile, Array.Empty<byte>());
-            return;
-        }
-
-        var filter = string.Join("+", filterParts);
-        var ffmpegArgs = $"-y -i \"{inputFile}\" -af \"aselect='{filter}',asetpts=N/SR/TB\" \"{outputFile}\"";
-
         var process = new Process
         {
             StartInfo = new ProcessStartInfo
             {
                 FileName = "ffmpeg",
-                Arguments = ffmpegArgs,
+                Arguments = arguments,
+                RedirectStandardOutput = false,
+                RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardError = true
             }
+        };
+        process.StartInfo.FileName = "ffmpeg";
+        process.EnableRaisingEvents = false;
+        process.StartInfo.Arguments = arguments;
+
+        _logger.LogInformation("Starting FFmpeg for {Description} with arguments: {Arguments}", description, arguments);
+        var errorBuilder = new StringBuilder();
+
+        process.ErrorDataReceived += (sender, e) =>
+        {
+            if (e.Data != null)
+                errorBuilder.AppendLine(e.Data);
         };
 
         process.Start();
+        process.BeginErrorReadLine();
+
         await process.WaitForExitAsync();
+        var errorOutput = errorBuilder.ToString();
 
         if (process.ExitCode != 0)
         {
-            var error = await process.StandardError.ReadToEndAsync();
-            throw new InvalidOperationException($"ffmpeg failed to remove segments: {error}");
+            _logger.LogError("FFmpeg failed to convert {Description} file with exit code: {ExitCode}", description, process.ExitCode);
+            throw new Exception($"Failed to process ffmpeg command with arguments: {arguments}, {errorOutput.ToString()}");
         }
+
+        _logger.LogInformation("FFmpeg completed {Description} conversion successfully.", description);
+        return 0;
     }
 }

@@ -24,9 +24,10 @@ public class FeedCacheService
     {
         try
         {
+            _logger.LogInformation("Starting cache update for podcast {PodcastId}", id);
             var feed = await _xmlService.GenerateNewFeedAsync(id);
             FeedCache[id] = feed;
-            _logger.LogDebug("Updated cache for podcast {PodcastId}", id);
+            _logger.LogInformation("Successfully updated cache for podcast {PodcastId}", id);
         }
         catch (Exception ex)
         {
@@ -37,9 +38,9 @@ public class FeedCacheService
 
     public Task UpdateMetaDataAsync(Guid id, PodcastMetadata podcastMetadata)
     {
-
         MetaDataCache[id] = podcastMetadata;
-        _logger.LogDebug("Updated metadata cache for podcast {PodcastId}", id);
+        _logger.LogInformation("Updated metadata cache for podcast {PodcastId} - ProcessedEpisodes: {ProcessedCount}, NonProcessedEpisodes: {NonProcessedCount}", 
+            id, podcastMetadata.processedEpisodes?.Count ?? 0, podcastMetadata.nonProcessedEpisodes?.Count ?? 0);
         return Task.CompletedTask;
     }
 
@@ -47,22 +48,31 @@ public class FeedCacheService
     {
         try
         {
-            _logger.LogInformation("Building feed cache");
+            _logger.LogInformation("Feed cache build STARTED");
             var podcasts = await _podcastServices.GetPodcastsAsync();
+            _logger.LogInformation("Found {PodcastCount} podcasts to process in cache build", podcasts.Count);
 
+            var processedCount = 0;
             foreach (var podcast in podcasts)
             {
                 try
                 {
+                    _logger.LogInformation("Processing podcast {PodcastId} ({Current}/{Total}) in cache build", 
+                        podcast.Id, processedCount + 1, podcasts.Count);
                     await UpdatePodcastCacheAsync(podcast.Id);
+                    processedCount++;
+                    _logger.LogInformation("Successfully processed podcast {PodcastId} ({Current}/{Total})", 
+                        podcast.Id, processedCount, podcasts.Count);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to build cache for podcast {PodcastId}", podcast.Id);
+                    processedCount++;
                 }
             }
 
-            _logger.LogInformation("Feed cache built with {Count} items", FeedCache.Count);
+            _logger.LogInformation("Feed cache build COMPLETED FINE with {Count} items, {ProcessedCount}/{TotalCount} podcasts processed", 
+                FeedCache.Count, processedCount, podcasts.Count);
         }
         catch (Exception ex)
         {

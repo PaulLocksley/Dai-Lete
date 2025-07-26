@@ -350,7 +350,17 @@ public class PodcastServices
             // Calculate processed duration and record metrics
             var processedDuration = await GetAudioDurationAsync(finalFile);
             var timeSaved = originalDuration - processedDuration;
-
+            if (timeSaved < TimeSpan.FromSeconds(originalDuration.TotalSeconds * 0.7))
+            {
+                _logger.LogWarning("Less than 70% of the original file remains, something went wrong :(");
+                File.Move(preLocal, finalFile, overwrite: true);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    File.Copy(preLocal, $"{preLocal}-failed-local");
+                    File.Copy(preRemote, $"{preRemote}-failed-remote");
+                }
+                timeSaved = TimeSpan.Zero;
+            }
             if (timeSaved > TimeSpan.Zero)
             {
                 var podcastName = await GetPodcastNameAsync(podcastId);

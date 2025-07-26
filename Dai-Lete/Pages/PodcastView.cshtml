@@ -52,15 +52,17 @@
                         
                         <audio controls>
                         <source src=@Html.Raw($"https://{Model.BaseAddress}/Podcasts/{p.Podcast.Id}/{String.Concat(p.episodeId.Split(Model.InvalidChars))}.mp3")
-                                type="audio/mpeg">
+                                type="audio/mpeg" preload="none">
                         </audio>
                     </td>
 
                     <td>@p.pubDate</td>
                     <td>
-                        <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId">
+                        <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId"
+                                hx-indicator="next .htmx-indicator">
                             Delete Episode
                         </button>
+                        <span class="htmx-indicator">Deleting...</span>
 
                     </td>
                 </tr>
@@ -89,7 +91,11 @@
                         <button type="submit">Process Episode</button>
                     </form>
                     *@
-                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId">Process Episode</button>
+                    <button hx-post="Podcast/Queue?podcastInUri=@p.Podcast.InUri&podcastGUID=@p.Podcast.Id&episodeUrl=@p.downloadLink&episodeGuid=@p.episodeId"
+                            hx-indicator="next .htmx-indicator">
+                        Process Episode
+                    </button>
+                    <span class="htmx-indicator">Processing...</span>
                 </div>
             </div>
         }

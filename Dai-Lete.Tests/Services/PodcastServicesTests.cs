@@ -138,4 +138,60 @@ public class PodcastServicesTests
             Directory.Delete(Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString()), true);
         }
     }
+
+
+
+    [Fact]
+    public async Task ProcessDownloadedEpisodeAsync_WithRealAudioFiles()
+    {
+        var httpClient = new HttpClient();
+        var service = new PodcastServices(
+            _mockLogger.Object,
+            httpClient,
+            _mockDatabaseService.Object,
+            _metricsService,
+            _configManager);
+
+        var podcastId = Guid.NewGuid();
+        var episodeId = "test-episode";
+        var testDataPath = Path.Combine(Path.GetDirectoryName(typeof(PodcastServicesTests).Assembly.Location)!, "TestData");
+        var workingDirectory = Path.Combine(Path.GetTempPath(), podcastId.ToString());
+
+        Directory.CreateDirectory(workingDirectory);
+        Directory.CreateDirectory(testDataPath);
+
+        var localTestFile = Path.Combine(testDataPath, "real.local.mp3");
+        var remoteTestFile = Path.Combine(testDataPath, "real.remote.mp3");
+        var localWorkingFile = Path.Combine(workingDirectory, $"{episodeId}.local");
+        var remoteWorkingFile = Path.Combine(workingDirectory, $"{episodeId}.remote");
+
+        if (!File.Exists(localTestFile) || !File.Exists(remoteTestFile))
+        {
+            Assert.Fail("Test data files local.mp3 and remote.mp3 must exist in TestData directory");
+            return;
+        }
+
+        File.Copy(localTestFile, localWorkingFile, true);
+        File.Copy(remoteTestFile, remoteWorkingFile, true);
+
+        var originalLocalDuration = await service.GetAudioDurationAsync(localWorkingFile);
+
+        var result = await service.ProcessDownloadedEpisodeAsync(podcastId, episodeId);
+
+        Assert.True(result > 0, "Processing should succeed and return file size");
+
+        var finalFile = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString(), $"{episodeId}.mp3");
+        Assert.True(File.Exists(finalFile), "Final processed file should exist");
+
+        var finalDuration = await service.GetAudioDurationAsync(finalFile);
+        var timeSaved = originalLocalDuration.TotalSeconds - finalDuration.TotalSeconds;
+
+        Assert.True(timeSaved > 0,
+            $"Expected seconds removed, but {timeSaved:F2} seconds were removed. Original: {originalLocalDuration.TotalSeconds:F2}s, Final: {finalDuration.TotalSeconds:F2}s");
+        Directory.Delete(workingDirectory, true);
+        if (Directory.Exists(Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString())))
+        {
+            Directory.Delete(Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString()), true);
+        }
+    }
 }

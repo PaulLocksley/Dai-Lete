@@ -33,7 +33,7 @@ public class ConfigManager
             return envValue;
         if (int.TryParse(_configuration["lookAheadDistance"], out var configValue))
             return configValue;
-        return 60 * 8;
+        return 60 * 4;
     }
     public string GetUsername()
     {

@@ -232,12 +232,12 @@ public class PodcastServices
                 return (int)new FileInfo(finalFile).Length;
             }
 
-
-
-            string ffmpegArgsL = $" -y -i \"{preLocal}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingLocal}\"";
-            string ffmpegArgsR = $" -y -i \"{preRemote}\" -ar 22050 -ac 1 -acodec pcm_s16le \"{workingRemote}\"";
-            string ffmpegArgsQualityL = $" -y -i \"{preLocal}\" -ar 48000 -ac 2 -acodec pcm_s16le \"{qualityLocal}\"";
-            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" -c:a mp3 -b:a 256k -ar 48000 -ac 2 \"{finalFile}\"";
+            var qualityFfmpegProfile = " ";
+            var workingFfmpegProfile = " -filter_complex \"pan=mono|c0=FL\" ";
+            string ffmpegArgsL = $" -y -i \"{preLocal}\" {workingFfmpegProfile} -acodec pcm_u8  \"{workingLocal}\"";
+            string ffmpegArgsR = $" -y -i \"{preRemote}\" {workingFfmpegProfile} -acodec pcm_u8  \"{workingRemote}\"";
+            string ffmpegArgsQualityL = $" -y -i \"{preLocal}\" {qualityFfmpegProfile} -acodec pcm_s16le \"{qualityLocal}\"";
+            string ffmpegArgsFinal = $"-y -i \"{processedFile}\" -c:a mp3 -b:a 256k {qualityFfmpegProfile} \"{finalFile}\"";
 
 
             foreach (var arguments in new string[] { ffmpegArgsL, ffmpegArgsQualityL, ffmpegArgsR })
@@ -271,7 +271,8 @@ public class PodcastServices
 
             var qualityBytesPerSecond = qualityLLength / audioLength.TotalSeconds;
             var qualityThreeSecondByteWindow = (int)Math.Ceiling(qualityBytesPerSecond * 3);
-            qualityThreeSecondByteWindow = (qualityThreeSecondByteWindow / 4) * 4; // as above.
+            qualityThreeSecondByteWindow = (qualityThreeSecondByteWindow / 4) * 4; // as above but stereo.
+
 
             var headers = new byte[headerBytes];
             qualityL.ReadExactly(headers, 0, headerBytes);
@@ -310,7 +311,7 @@ public class PodcastServices
                     dropedFramesSinceLastHit = 0;
                     continue;
                 }
-                // look ahead four minutes plus byte window since last hit or end of file, whatever is smaller.
+
                 var lookAheadCap = Math.Min(initialR + ((threeSecondByteWindow / 3) * _configManager.GetLookAheadDistance()) + (threeSecondByteWindow * dropedFramesSinceLastHit), workingRLength);
                 var readDistance = (int)(lookAheadCap - initialR);
                 var bigBufferR = new byte[readDistance];
@@ -350,7 +351,8 @@ public class PodcastServices
             // Calculate processed duration and record metrics
             var processedDuration = await GetAudioDurationAsync(finalFile);
             var timeSaved = originalDuration - processedDuration;
-            if (timeSaved < TimeSpan.FromSeconds(originalDuration.TotalSeconds * 0.7))
+
+            if (timeSaved > TimeSpan.FromSeconds(originalDuration.TotalSeconds * 0.3))
             {
                 _logger.LogWarning("Less than 70% of the original file remains, something went wrong :(");
                 File.Move(preLocal, finalFile, overwrite: true);
@@ -385,7 +387,6 @@ public class PodcastServices
             throw;
         }
     }
-
 
     public async Task<TimeSpan> GetAudioDurationAsync(string filePath)
     {

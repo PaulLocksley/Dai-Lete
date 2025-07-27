@@ -12,13 +12,19 @@ public class XmlService
     private readonly ConfigManager _configManager;
     private readonly RedirectService _redirectService;
     private readonly IDatabaseService _databaseService;
+    private readonly PodcastServices _podcastService;
 
-    public XmlService(ILogger<XmlService> logger, ConfigManager configManager, RedirectService redirectService, IDatabaseService databaseService)
+    public XmlService(ILogger<XmlService> logger,
+     ConfigManager configManager,
+     RedirectService redirectService,
+     IDatabaseService databaseService,
+     PodcastServices podcastService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _redirectService = redirectService ?? throw new ArgumentNullException(nameof(redirectService));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _podcastService = podcastService ?? throw new ArgumentNullException(nameof(podcastService));
     }
 
     public async Task<XmlDocument> GenerateNewFeedAsync(Guid podcastId)
@@ -153,9 +159,10 @@ public class XmlService
             }
             if (redirectNode is not null && channelNode is not null)
             {
+                _ = _podcastService.UpdatePodcastUrl(podcastId, redirectNode.InnerText);
                 channelNode.RemoveChild(redirectNode);
             }
-            FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
+            _ = FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                     metaDataImageUrl, metaDataDescription,
                                                                     processedEpisodes, nonProcessedEpisodes));
 

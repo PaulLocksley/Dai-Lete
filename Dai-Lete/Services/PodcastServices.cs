@@ -498,4 +498,43 @@ public class PodcastServices
         _logger.LogInformation("FFmpeg completed {Description} conversion successfully.", description);
         return 0;
     }
+    public async Task UpdatePodcastUrl(Guid podcastId, string url)
+    {
+        if (podcastId == Guid.Empty)
+            throw new ArgumentException("Podcast ID cannot be empty", nameof(podcastId));
+
+        if (string.IsNullOrWhiteSpace(url))
+            throw new ArgumentException("URL cannot be null or empty", nameof(url));
+
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            throw new ArgumentException("Invalid URL format", nameof(url));
+
+        try
+        {
+            const string selectSql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            using var connection = await _databaseService.GetConnectionAsync();
+            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(selectSql, new { id = podcastId });
+            
+            if (podcast is null)
+            {
+                throw new ArgumentException($"Podcast with id {podcastId} not found", nameof(podcastId));
+            }
+
+            if (podcast.InUri.ToString().Equals(uri.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                _logger.LogDebug("Podcast {PodcastId} URL is already set to {Url}, no update needed", podcastId, uri);
+                return;
+            }
+
+            const string updateSql = @"UPDATE Podcasts SET InUri = @url WHERE Id = @id";
+            await connection.ExecuteAsync(updateSql, new { url = uri.ToString(), id = podcastId });
+
+            _logger.LogInformation("Successfully updated podcast {PodcastId} URL from {OldUrl} to {NewUrl}", podcastId, podcast.InUri, uri);
+        }
+        catch (Exception ex) when (!(ex is ArgumentException))
+        {
+            _logger.LogError(ex, "Failed to update podcast {PodcastId} URL to {Url}", podcastId, url);
+            throw;
+        }
+    }
 }

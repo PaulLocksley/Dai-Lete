@@ -10,6 +10,17 @@ public class PodcastEpisodeMetadata
     public string episodeId;
     public Podcast Podcast;
 
+    public PodcastEpisodeMetadata()
+    {
+        this.episodeName = string.Empty;
+        this.description = string.Empty;
+        this.pubDate = null;
+        this.imageLink = null;
+        this.downloadLink = null;
+        this.episodeId = string.Empty;
+        this.Podcast = new Podcast();
+    }
+
     public PodcastEpisodeMetadata(string episodeName, string description, DateTime? pubDate, Uri? imageLink
         , string episodeId, Podcast podcast)
     {

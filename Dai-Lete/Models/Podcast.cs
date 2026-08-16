@@ -10,6 +10,13 @@ public class Podcast
     public PodcastSettings? PodcastSettings;
     public string? PodcastName;
 
+    public Podcast()
+    {
+        InUri = new Uri("about:blank");
+        Id = Guid.Empty;
+        PodcastSettings = new PodcastSettings(new List<string>());
+    }
+
     public Podcast(Uri inUri)
     {
         InUri = inUri;

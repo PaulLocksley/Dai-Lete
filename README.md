@@ -18,15 +18,48 @@ This program uses the fact that the same ad will likely never be run across the 
 
 
 ## Requirements 
-- Dotnet 8
+- Dotnet 10
 - FFMPEG
 - socks5 proxy in another region
+- Valkey-compatible server for feed cache and episode job queue
+- Shared podcast storage if running more than one frontend/worker node
 
 ## Instructions
-Set up a systemd service with the following env variables
-- proxyAddress - your Socks5 proxy
-- baseAddress - The url you can use to access the mp3 podcast files
-- podcastStoragePath - (optional) directory where processed podcast files are stored (defaults to ./Podcasts)
-- AUTH_USERNAME - username for web interface login (defaults to "admin")
-- AUTH_PASSWORD - password for web interface login (defaults to "password")
+Set up the app with the following environment variables:
 
+- `proxyAddress` - your Socks5 proxy
+- `baseAddress` - the URL clients use to access feeds and MP3 podcast files
+- `podcastStoragePath` - optional directory where processed podcast files are stored, defaults to `./Podcasts`
+- `AUTH_USERNAME` - username for web interface login, defaults to `admin`
+- `AUTH_PASSWORD` - password for web interface login, defaults to `password`
+- `Valkey__ConnectionString` - Valkey connection string, for example `valkey:6379`
+- `Worker__Enabled` - set to `true` on the worker node and `false` on frontend nodes
+- `Valkey__ConsumerName` - optional unique worker name, commonly the pod hostname
+
+Example single-node settings:
+
+```text
+Worker__Enabled=true
+Valkey__ConnectionString=localhost:6379
+```
+
+Example frontend node settings:
+
+```text
+Worker__Enabled=false
+Valkey__ConnectionString=valkey:6379
+```
+
+Example worker node settings:
+
+```text
+Worker__Enabled=true
+Valkey__ConnectionString=valkey:6379
+Valkey__ConsumerName=dai-lete-worker-0
+```
+
+### High Availability
+
+For multiple frontend nodes, mount the same podcast storage path on every frontend and worker node. Frontends serve the processed MP3 files from this shared path, while the worker writes processed episodes there.
+
+Run only one worker `Worker__Enabled=false` so they only serve the web UI/API and enqueue jobs.

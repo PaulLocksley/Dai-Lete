@@ -1,15 +1,8 @@
 @page
-@using Dai_Lete.Services
-@using Dai_Lete.Repositories
 @using Dai_Lete.Models
 @model Dai_Lete.Pages.PodcastView
 @{
-    PodcastMetadata podcastMetadata = new PodcastMetadata();
-    if (Model.podcastID is not null)
-    {
-        podcastMetadata = FeedCache.metaDataCache[Model.podcastID.Value];
-    }
-    Console.WriteLine("1"+Model.podcastID);
+    var podcastMetadata = Model.PodcastMetadata;
     ViewData["Title"] = podcastMetadata.title;
 }
 <body>

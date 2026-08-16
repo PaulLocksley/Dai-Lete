@@ -6,12 +6,15 @@ using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.FileProviders;
 using Prometheus;
+using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add configuration options
 builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
 builder.Services.Configure<DatabaseOptions>(builder.Configuration.GetSection(DatabaseOptions.SectionName));
+builder.Services.Configure<WorkerOptions>(builder.Configuration.GetSection(WorkerOptions.SectionName));
+builder.Services.Configure<ValkeyOptions>(builder.Configuration.GetSection(ValkeyOptions.SectionName));
 
 // Add authentication
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -50,7 +53,14 @@ builder.Services.AddSingleton<PodcastServices>();
 builder.Services.AddSingleton<RedirectService>();
 builder.Services.AddSingleton<XmlService>();
 builder.Services.AddSingleton<FeedCacheService>();
-builder.Services.AddHostedService<ConvertNewEpisodes>();
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(builder.Configuration["Valkey:ConnectionString"] ?? "localhost:6379"));
+builder.Services.AddSingleton<IEpisodeJobQueue, ValkeyEpisodeJobQueue>();
+
+if (builder.Configuration.GetValue("Worker:Enabled", true))
+{
+    builder.Services.AddHostedService<ConvertNewEpisodes>();
+}
 
 builder.Services.AddRazorPages(options =>
 {
@@ -118,6 +128,5 @@ SqLite.Initialize(databaseService);
 // Initialize FeedCache
 var feedCacheService = app.Services.GetRequiredService<FeedCacheService>();
 FeedCache.Initialize(feedCacheService);
-await FeedCache.buildCache();
 
 app.Run();

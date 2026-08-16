@@ -35,10 +35,10 @@ public class PodcastServices
     {
         try
         {
-            const string sql = @"SELECT * FROM Podcasts";
+            const string sql = @"SELECT Id, InUri FROM Podcasts";
             using var connection = await _databaseService.GetConnectionAsync();
-            var results = await connection.QueryAsync<Podcast>(sql);
-            return results.ToList();
+            var results = await connection.QueryAsync(sql);
+            return results.Select(ToPodcast).ToList();
         }
         catch (Exception ex)
         {
@@ -51,9 +51,10 @@ public class PodcastServices
     {
         try
         {
-            const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            const string sql = @"SELECT Id, InUri FROM Podcasts WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
-            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
+            var row = await connection.QueryFirstOrDefaultAsync(sql, new { id = podcastId });
+            Podcast? podcast = row is null ? null : ToPodcast(row);
 
             if (podcast is null)
             {
@@ -181,7 +182,7 @@ public class PodcastServices
         }
     }
 
-    public async Task<int> ProcessDownloadedEpisodeAsync(Guid podcastId, string episodeId)
+    public async Task<ProcessedEpisodeResult> ProcessDownloadedEpisodeAsync(Guid podcastId, string episodeId)
     {
         if (string.IsNullOrWhiteSpace(episodeId))
             throw new ArgumentException("Episode ID cannot be null or empty", nameof(episodeId));
@@ -195,11 +196,8 @@ public class PodcastServices
             if (!File.Exists(originalFilePath))
             {
                 _logger.LogWarning("Original audio file not found for episode {EpisodeId}: {FilePath}", episodeId, originalFilePath);
-                return -1;
+                return new ProcessedEpisodeResult(-1);
             }
-
-            var originalDuration = await GetAudioDurationAsync(originalFilePath);
-            _logger.LogDebug("Original episode duration: {Duration} for {EpisodeId}", originalDuration, episodeId);
 
             _logger.LogInformation("Starting to process {EpisodeId}", episodeId);
 
@@ -224,12 +222,17 @@ public class PodcastServices
                 throw new FileNotFoundException($"Remote audio file not found: {preRemote}");
             }
 
+            var localDuration = await GetAudioDurationAsync(preLocal);
+            var remoteDuration = await GetAudioDurationAsync(preRemote);
+            var originalDuration = localDuration > remoteDuration ? localDuration : remoteDuration;
+            _logger.LogDebug("Original episode duration: {Duration} for {EpisodeId}", originalDuration, episodeId);
+
             if (FileUtilities.GetMd5Sum(preLocal) == FileUtilities.GetMd5Sum(preRemote))
             {
                 _logger.LogWarning("Episodes are identical {EpisodeId} - 100% complete: No processing needed", episodeId);
                 File.Move(preLocal, finalFile);
                 File.Delete(preRemote);
-                return (int)new FileInfo(finalFile).Length;
+                return new ProcessedEpisodeResult((int)new FileInfo(finalFile).Length, originalDuration, originalDuration);
             }
 
             var qualityFfmpegProfile = " ";
@@ -248,7 +251,7 @@ public class PodcastServices
                     continue;
                 }
                 _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", ffmpeg_result);
-                return -1;
+                return new ProcessedEpisodeResult(-1, originalDuration);
             }
 
 
@@ -345,7 +348,7 @@ public class PodcastServices
             if (result != 0)
             {
                 _logger.LogError("FFmpeg failed to convert local file with exit code: {ExitCode}", result);
-                return -1;
+                return new ProcessedEpisodeResult(-1, originalDuration);
             }
 
             // Calculate processed duration and record metrics
@@ -362,6 +365,7 @@ public class PodcastServices
                     File.Copy(preRemote, $"{preRemote}-failed-remote");
                 }
                 timeSaved = TimeSpan.Zero;
+                processedDuration = await GetAudioDurationAsync(finalFile);
             }
             if (timeSaved > TimeSpan.Zero)
             {
@@ -379,7 +383,7 @@ public class PodcastServices
             File.Delete(processedFile);
 
             _logger.LogInformation("Episode {EpisodeId} - 100% complete: Processing finished successfully", episodeId);
-            return (int)new FileInfo(finalFile).Length;
+            return new ProcessedEpisodeResult((int)new FileInfo(finalFile).Length, originalDuration, processedDuration);
         }
         catch (Exception ex)
         {
@@ -434,9 +438,10 @@ public class PodcastServices
     {
         try
         {
-            const string sql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            const string sql = @"SELECT Id, InUri FROM Podcasts WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
-            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(sql, new { id = podcastId });
+            var row = await connection.QueryFirstOrDefaultAsync(sql, new { id = podcastId });
+            Podcast? podcast = row is null ? null : ToPodcast(row);
 
             if (podcast?.InUri != null)
             {
@@ -511,9 +516,10 @@ public class PodcastServices
 
         try
         {
-            const string selectSql = @"SELECT * FROM Podcasts WHERE Id = @id";
+            const string selectSql = @"SELECT Id, InUri FROM Podcasts WHERE Id = @id";
             using var connection = await _databaseService.GetConnectionAsync();
-            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(selectSql, new { id = podcastId });
+            var row = await connection.QueryFirstOrDefaultAsync(selectSql, new { id = podcastId });
+            Podcast? podcast = row is null ? null : ToPodcast(row);
             
             if (podcast is null)
             {
@@ -536,5 +542,11 @@ public class PodcastServices
             _logger.LogError(ex, "Failed to update podcast {PodcastId} URL to {Url}", podcastId, url);
             throw;
         }
+    }
+
+    private static Podcast ToPodcast(object row)
+    {
+        var values = (IDictionary<string, object>)row;
+        return new Podcast((string)values["Id"], (string)values["InUri"]);
     }
 }

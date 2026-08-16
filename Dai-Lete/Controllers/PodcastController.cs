@@ -23,12 +23,16 @@ public class PodcastController : Controller
 {
     private readonly PodcastServices _podcastServices;
     private readonly IDatabaseService _databaseService;
+    private readonly IEpisodeJobQueue _episodeJobQueue;
+    private readonly ConfigManager _configManager;
     private readonly ILogger<PodcastController> _logger;
 
-    public PodcastController(PodcastServices podcastServices, IDatabaseService databaseService, ILogger<PodcastController> logger)
+    public PodcastController(PodcastServices podcastServices, IDatabaseService databaseService, IEpisodeJobQueue episodeJobQueue, ConfigManager configManager, ILogger<PodcastController> logger)
     {
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _episodeJobQueue = episodeJobQueue ?? throw new ArgumentNullException(nameof(episodeJobQueue));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     [HttpPost("add")]
@@ -102,7 +106,7 @@ public class PodcastController : Controller
                 return NotFound("Podcast not found");
             }
 
-            FeedCache.metaDataCache.Remove(id);
+            await FeedCache.RemovePodcastCacheAsync(id);
             return Ok("Podcast deleted successfully");
         }
         catch (Exception ex)
@@ -116,18 +120,12 @@ public class PodcastController : Controller
     }
 
     [HttpPost("Queue")]
-    public IActionResult queueEpisode(string podcastInUri, string podcastGUID, string episodeUrl, string episodeGuid)
+    public async Task<IActionResult> queueEpisode(string podcastInUri, string podcastGUID, string episodeUrl, string episodeGuid)
     {
         if (string.IsNullOrWhiteSpace(podcastGUID) || !Guid.TryParse(podcastGUID, out var parsedPodcastGuid))
         {
             _logger.LogWarning("Invalid podcast GUID provided: {PodcastGUID}", podcastGUID);
             return BadRequest("Invalid podcast GUID format");
-        }
-
-        if (!FeedCache.feedCache.ContainsKey(parsedPodcastGuid))
-        {
-            _logger.LogWarning("Podcast not found in cache: {PodcastId}", parsedPodcastGuid);
-            return NotFound("Podcast not known to server");
         }
 
         if (string.IsNullOrWhiteSpace(episodeUrl) || string.IsNullOrWhiteSpace(episodeGuid))
@@ -138,10 +136,30 @@ public class PodcastController : Controller
 
         try
         {
-            PodcastQueue.toProcessQueue.Enqueue((podcast: new Podcast(podcastGUID, podcastInUri), episodeUrl: episodeUrl, episodeGuid: episodeGuid));
-            var queueCount = PodcastQueue.toProcessQueue.Count;
-            _logger.LogInformation("Episode {EpisodeGuid} added to queue. Queue size: {QueueCount}", episodeGuid, queueCount);
-            return Ok($"Episode added to queue. {queueCount} item/s in queue");
+            using var connection = await _databaseService.GetConnectionAsync();
+            const string podcastSql = "SELECT Id FROM Podcasts WHERE Id = @id";
+            var knownPodcast = await connection.QueryFirstOrDefaultAsync<string?>(podcastSql, new { id = parsedPodcastGuid });
+            if (knownPodcast is null)
+            {
+                _logger.LogWarning("Podcast not found: {PodcastId}", parsedPodcastGuid);
+                return NotFound("Podcast not known to server");
+            }
+
+            var jobId = await _episodeJobQueue.EnqueueAsync(new EpisodeJob
+            {
+                PodcastId = parsedPodcastGuid,
+                PodcastInUri = podcastInUri,
+                EpisodeUrl = episodeUrl,
+                EpisodeGuid = episodeGuid
+            });
+
+            if (string.IsNullOrEmpty(jobId))
+            {
+                return Ok("Episode already queued");
+            }
+
+            _logger.LogInformation("Episode {EpisodeGuid} added to Valkey queue as job {JobId}", episodeGuid, jobId);
+            return Ok($"Episode added to queue. Job ID: {jobId}");
         }
         catch (Exception ex)
         {
@@ -172,7 +190,7 @@ public class PodcastController : Controller
                 return false;
             }
 
-            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.mp3");
+            var filepath = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString(), $"{episodeGuid}.mp3");
             if (System.IO.File.Exists(filepath))
             {
                 System.IO.File.Delete(filepath);
@@ -194,12 +212,6 @@ public class PodcastController : Controller
 
     private async Task<bool> DeleteEpisodeInternal(Guid podcastId, string episodeGuid)
     {
-        if (!FeedCache.feedCache.ContainsKey(podcastId))
-        {
-            _logger.LogWarning("Podcast not found in cache: {PodcastId}", podcastId);
-            return false;
-        }
-
         using var connection = await _databaseService.GetConnectionAsync();
         return await DeleteEpisodeInternal(connection, podcastId, episodeGuid);
     }
@@ -211,12 +223,6 @@ public class PodcastController : Controller
         {
             _logger.LogWarning("Episode GUID is required for deletion");
             return BadRequest("Episode GUID is required");
-        }
-
-        if (!FeedCache.feedCache.ContainsKey(podcastId))
-        {
-            _logger.LogWarning("Podcast not found in cache: {PodcastId}", podcastId);
-            return NotFound("Podcast not known to server");
         }
 
         var success = await DeleteEpisodeInternal(podcastId, episodeGuid);
@@ -245,13 +251,20 @@ public class PodcastController : Controller
     {
         try
         {
-            if (!FeedCache.feedCache.ContainsKey(id))
+            var feedXml = await FeedCache.GetPodcastFeedXmlAsync(id);
+            if (feedXml is null)
             {
-                _logger.LogWarning("Podcast feed not found in cache: {PodcastId}", id);
+                _logger.LogInformation("Podcast feed not found in Valkey cache, rebuilding: {PodcastId}", id);
+                await FeedCache.UpdatePodcastCache(id);
+                feedXml = await FeedCache.GetPodcastFeedXmlAsync(id);
+            }
+
+            if (feedXml is null)
+            {
+                _logger.LogWarning("Podcast feed not found after rebuild: {PodcastId}", id);
                 return NotFound($"Podcast feed not found for ID: {id}");
             }
 
-            var feedXml = FeedCache.feedCache[id].OuterXml;
             _logger.LogDebug("Serving podcast feed for {PodcastId}", id);
             return Content(feedXml, "application/xml");
         }

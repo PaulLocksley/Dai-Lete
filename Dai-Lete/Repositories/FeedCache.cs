@@ -1,5 +1,3 @@
-using System.Collections.Concurrent;
-using System.Xml;
 using Dai_Lete.Models;
 using Dai_Lete.Services;
 
@@ -9,12 +7,21 @@ public static class FeedCache
 {
     private static FeedCacheService? _feedCacheService;
 
-    public static IDictionary<Guid, XmlDocument> feedCache => _feedCacheService?.FeedCache ?? new ConcurrentDictionary<Guid, XmlDocument>();
-    public static IDictionary<Guid, PodcastMetadata> metaDataCache => _feedCacheService?.MetaDataCache ?? new ConcurrentDictionary<Guid, PodcastMetadata>();
-
     public static void Initialize(FeedCacheService feedCacheService)
     {
         _feedCacheService = feedCacheService ?? throw new ArgumentNullException(nameof(feedCacheService));
+    }
+
+    public static async Task<string?> GetPodcastFeedXmlAsync(Guid id)
+    {
+        if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
+        return await _feedCacheService.GetPodcastFeedXmlAsync(id);
+    }
+
+    public static async Task<bool> HasPodcastFeedAsync(Guid id)
+    {
+        if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
+        return await _feedCacheService.HasPodcastFeedAsync(id);
     }
 
     public static async Task UpdatePodcastCache(Guid id)
@@ -27,6 +34,24 @@ public static class FeedCache
     {
         if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
         await _feedCacheService.UpdateMetaDataAsync(id, podcastMetadata);
+    }
+
+    public static async Task<PodcastMetadata?> GetMetaDataAsync(Guid id)
+    {
+        if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
+        return await _feedCacheService.GetMetaDataAsync(id);
+    }
+
+    public static async Task<IReadOnlyDictionary<Guid, PodcastMetadata>> GetAllMetaDataAsync()
+    {
+        if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
+        return await _feedCacheService.GetAllMetaDataAsync();
+    }
+
+    public static async Task RemovePodcastCacheAsync(Guid id)
+    {
+        if (_feedCacheService is null) throw new InvalidOperationException("FeedCache not initialized");
+        await _feedCacheService.RemovePodcastCacheAsync(id);
     }
 
     public static async Task buildCache()

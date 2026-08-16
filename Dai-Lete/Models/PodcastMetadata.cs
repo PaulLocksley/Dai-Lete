@@ -2,12 +2,16 @@ namespace Dai_Lete.Models;
 
 public struct PodcastMetadata
 {
-    public string title;
-    public string publisher;
+    public string title = string.Empty;
+    public string publisher = string.Empty;
     public Uri? imageUrl;
-    public string description;
-    public IList<PodcastEpisodeMetadata> processedEpisodes;
-    public IList<PodcastEpisodeMetadata> nonProcessedEpisodes;
+    public string description = string.Empty;
+    public IList<PodcastEpisodeMetadata> processedEpisodes = new List<PodcastEpisodeMetadata>();
+    public IList<PodcastEpisodeMetadata> nonProcessedEpisodes = new List<PodcastEpisodeMetadata>();
+
+    public PodcastMetadata()
+    {
+    }
 
     public PodcastMetadata(string title, string publisher, Uri? imageUrl, string description,
         IList<PodcastEpisodeMetadata> processedEpisodes, IList<PodcastEpisodeMetadata> nonProcessedEpisodes)

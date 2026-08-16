@@ -58,7 +58,7 @@ async function addPodcast(){
         <button class="btn-primary rounded" onclick="addPodcast()">Add Podcast</button>
     </div>
 <br/>
-    @foreach (var pod in FeedCache.metaDataCache)
+    @foreach (var pod in Model.PodcastMetadata)
     {
         <div id="pod-card-@pod.Key" 
             class="border-primary d-flex flex-column p-5 bg-black bg-opacity-25 m-1 rounded" 

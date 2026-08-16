@@ -11,16 +11,19 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
     private readonly PodcastServices _podcastServices;
     private readonly PodcastOptions _options;
     private readonly IDatabaseService _databaseService;
+    private readonly IEpisodeJobQueue _episodeJobQueue;
     private Timer? _timer;
     private Timer? _queueTimer;
     private bool _queueLock;
 
-    public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger, PodcastServices podcastServices, IOptions<PodcastOptions> options, IDatabaseService databaseService)
+    public ConvertNewEpisodes(ILogger<ConvertNewEpisodes> logger, PodcastServices podcastServices, IOptions<PodcastOptions> options,
+        IDatabaseService databaseService, IEpisodeJobQueue episodeJobQueue)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+        _episodeJobQueue = episodeJobQueue ?? throw new ArgumentNullException(nameof(episodeJobQueue));
     }
 
 
@@ -55,25 +58,25 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         {
             int processedEpisodes = 0;
 
-            while (!PodcastQueue.toProcessQueue.IsEmpty)
+            var jobs = await _episodeJobQueue.ReadAsync(CancellationToken.None);
+            foreach (var queuedJob in jobs)
             {
-                if (!PodcastQueue.toProcessQueue.TryDequeue(out var episodeInfo))
-                {
-                    break;
-                }
+                var episodeInfo = queuedJob.Job;
 
                 using var connection = await _databaseService.GetConnectionAsync();
                 const string sql = "SELECT Id FROM Episodes WHERE Id = @id AND PodcastId = @pId";
                 var existingEpisodes = await connection.QueryAsync<string>(sql,
-                    new { pId = episodeInfo.podcast.Id, id = episodeInfo.episodeGuid });
+                    new { pId = episodeInfo.PodcastId, id = episodeInfo.EpisodeGuid });
 
                 if (existingEpisodes.Any())
                 {
-                    _logger.LogInformation("Episode {EpisodeGuid} already exists, skipping", episodeInfo.episodeGuid);
+                    _logger.LogInformation("Episode {EpisodeGuid} already exists, skipping", episodeInfo.EpisodeGuid);
+                    await _episodeJobQueue.CompleteAsync(queuedJob);
                     continue;
                 }
 
-                await ProcessEpisodeAsync(episodeInfo.podcast, episodeInfo.episodeUrl, episodeInfo.episodeGuid);
+                await ProcessEpisodeAsync(new Podcast(episodeInfo.PodcastId.ToString(), episodeInfo.PodcastInUri), episodeInfo.EpisodeUrl, episodeInfo.EpisodeGuid);
+                await _episodeJobQueue.CompleteAsync(queuedJob);
                 processedEpisodes++;
             }
 
@@ -113,8 +116,14 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                         continue;
                     }
 
-                    _logger.LogInformation("Found new episode for podcast {PodcastUri}", podcast.InUri);
-                    await ProcessEpisodeAsync(podcast, latest.downloadLink, latest.guid);
+                    _logger.LogInformation("Found new episode for podcast {PodcastUri}, queueing", podcast.InUri);
+                    await _episodeJobQueue.EnqueueAsync(new EpisodeJob
+                    {
+                        PodcastId = podcast.Id,
+                        PodcastInUri = podcast.InUri.ToString(),
+                        EpisodeUrl = latest.downloadLink,
+                        EpisodeGuid = latest.guid
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -139,19 +148,27 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         try
         {
             await _podcastServices.DownloadEpisodeAsync(podcast, downloadLink, episodeGuid);
-            var fileSize = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
+            var result = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
 
             using var connection = await _databaseService.GetConnectionAsync();
-            const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize) VALUES (@id, @pid, @fs)";
-            await connection.ExecuteAsync(sql, new { id = episodeGuid, pid = podcast.Id, fs = fileSize });
+            const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize, InitialLengthSeconds, ProcessedLengthSeconds)
+                                 VALUES (@id, @pid, @fs, @initialLength, @processedLength)";
+            await connection.ExecuteAsync(sql, new
+            {
+                id = episodeGuid,
+                pid = podcast.Id,
+                fs = result.FileSize,
+                initialLength = result.InitialLengthSeconds,
+                processedLength = result.ProcessedLengthSeconds
+            });
 
-            _ = FeedCache.UpdatePodcastCache(podcast.Id);
+            await FeedCache.UpdatePodcastCache(podcast.Id);
 
             _logger.LogInformation("Successfully processed episode {EpisodeGuid}", episodeGuid);
         }
         catch (Exception ex)
         {
-            _ = FeedCache.UpdatePodcastCache(podcast.Id);
+            await FeedCache.UpdatePodcastCache(podcast.Id);
             _logger.LogError(ex, "Failed to process episode {EpisodeGuid} from {DownloadLink}", episodeGuid, downloadLink);
             throw;
         }

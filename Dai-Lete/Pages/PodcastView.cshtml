@@ -1,16 +1,10 @@
 @page
-@using Dai_Lete.Services
-@using Dai_Lete.Repositories
 @using Dai_Lete.Models
 @model Dai_Lete.Pages.PodcastView
 @{
-    PodcastMetadata podcastMetadata = new PodcastMetadata();
-    if (Model.podcastID is not null)
-    {
-        podcastMetadata = FeedCache.metaDataCache[Model.podcastID.Value];
-    }
-    Console.WriteLine("1"+Model.podcastID);
+    var podcastMetadata = Model.PodcastMetadata;
     ViewData["Title"] = podcastMetadata.title;
+    var showLengths = podcastMetadata.processedEpisodes.Any(p => p.initialLengthSeconds.HasValue || p.processedLengthSeconds.HasValue);
 }
 <body>
 <div class="container-fluid">
@@ -40,6 +34,11 @@
             <tr>
                 <th>Episode Name</th>
                 <th>Air Date</th>
+                @if (showLengths)
+                {
+                    <th>Initial Length</th>
+                    <th>Processed Length</th>
+                }
                 <th>Actions</th>
             </tr>
             </thead>
@@ -57,6 +56,11 @@
                     </td>
 
                     <td>@p.pubDate</td>
+                    @if (showLengths)
+                    {
+                        <td>@FormatDuration(p.initialLengthSeconds)</td>
+                        <td>@FormatDuration(p.processedLengthSeconds)</td>
+                    }
                     <td>
                         <button hx-delete="Podcast/DeleteEpisode?podcastId=@p.Podcast.Id&episodeGuid=@p.episodeId"
                                 hx-indicator="next .htmx-indicator">
@@ -102,3 +106,15 @@
     }
 </div>
 </body>
+
+@functions {
+    private static string FormatDuration(double? totalSeconds)
+    {
+        if (!totalSeconds.HasValue) return string.Empty;
+
+        var duration = TimeSpan.FromSeconds(totalSeconds.Value);
+        return duration.TotalHours >= 1
+            ? duration.ToString(@"h\:mm\:ss")
+            : duration.ToString(@"m\:ss");
+    }
+}

@@ -1,0 +1,6 @@
+{
+  "appHost": {
+    "language": "csharp",
+    "path": "Dai-Lete.AppHost/Dai-Lete.AppHost.csproj"
+  }
+}

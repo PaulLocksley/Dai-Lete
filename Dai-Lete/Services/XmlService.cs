@@ -44,19 +44,20 @@ public class XmlService
 
             using var connection = await _databaseService.GetConnectionAsync();
 
-            const string podcastSql = @"SELECT * FROM Podcasts WHERE Id = @podcastId";
-            var podcast = await connection.QueryFirstOrDefaultAsync<Podcast>(podcastSql, new { podcastId });
+            const string podcastSql = @"SELECT Id, InUri FROM Podcasts WHERE Id = @podcastId";
+            var podcastRow = await connection.QueryFirstOrDefaultAsync(podcastSql, new { podcastId });
+            Podcast? podcast = podcastRow is null ? null : ToPodcast(podcastRow);
 
             if (podcast is null)
             {
                 throw new ArgumentException($"Podcast with ID {podcastId} not found", nameof(podcastId));
             }
 
-            const string episodesSql = @"SELECT Id, FileSize FROM Episodes WHERE PodcastId = @pid";
+            const string episodesSql = @"SELECT Id, FileSize, InitialLengthSeconds, ProcessedLengthSeconds FROM Episodes WHERE PodcastId = @pid";
             var episodesQuery = await connection.QueryAsync(episodesSql, new { pid = podcastId });
             var episodes = episodesQuery.ToDictionary(
                 row => (string)row.Id,
-                row => (int)row.FileSize
+                row => new EpisodeRecord((int)row.FileSize, (double?)row.InitialLengthSeconds, (double?)row.ProcessedLengthSeconds)
             );
 
             using var reader = XmlReader.Create(podcast.InUri.ToString());
@@ -123,7 +124,11 @@ public class XmlService
 
                     if (episodes.ContainsKey(guid))
                     {
-                        processedEpisodes.Add(GetEpisodeMetaData(item, podcast));
+                        var episode = episodes[guid];
+                        var episodeMetadata = GetEpisodeMetaData(item, podcast);
+                        episodeMetadata.initialLengthSeconds = episode.InitialLengthSeconds;
+                        episodeMetadata.processedLengthSeconds = episode.ProcessedLengthSeconds;
+                        processedEpisodes.Add(episodeMetadata);
 
                         if (enclosure?.Attributes != null)
                         {
@@ -135,7 +140,7 @@ public class XmlService
                                         attribute.Value = $"https://{_configManager.GetBaseAddress()}/Podcasts/{podcastId}/{guid}.mp3";
                                         break;
                                     case "length":
-                                        attribute.Value = episodes[guid].ToString();
+                                        attribute.Value = episode.FileSize.ToString();
                                         break;
                                     case "type":
                                         attribute.Value = "audio/mpeg";
@@ -162,7 +167,7 @@ public class XmlService
                 _ = _podcastService.UpdatePodcastUrl(podcastId, redirectNode.InnerText);
                 channelNode.RemoveChild(redirectNode);
             }
-            _ = FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
+            await FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                     metaDataImageUrl, metaDataDescription,
                                                                     processedEpisodes, nonProcessedEpisodes));
 
@@ -211,6 +216,14 @@ public class XmlService
             }
         }
         return pm;
+    }
+
+    private sealed record EpisodeRecord(int FileSize, double? InitialLengthSeconds, double? ProcessedLengthSeconds);
+
+    private static Podcast ToPodcast(object row)
+    {
+        var values = (IDictionary<string, object>)row;
+        return new Podcast((string)values["Id"], (string)values["InUri"]);
     }
 
     private async Task ProcessPreProcessingInstructionsAsync(XmlDocument xmlDocument, string baseUri)

@@ -8,7 +8,7 @@
 - **Docker**: `docker build -t dai-lete .`
 
 ## Project Structure
-- **Main project**: `Dai-Lete/` (ASP.NET Core 9.0 web app)
+- **Main project**: `Dai-Lete/` (ASP.NET Core 10.0 web app)
 - **Test project**: `Dai-Lete.Tests/` (xUnit test suite with audio/transcript fixtures)
 - **Controllers**: API endpoints for podcast management
 - **Models**: Data models (Podcast, PodcastMetadata, etc.)

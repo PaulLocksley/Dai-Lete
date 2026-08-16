@@ -24,13 +24,15 @@ public class PodcastController : Controller
     private readonly PodcastServices _podcastServices;
     private readonly IDatabaseService _databaseService;
     private readonly IEpisodeJobQueue _episodeJobQueue;
+    private readonly ConfigManager _configManager;
     private readonly ILogger<PodcastController> _logger;
 
-    public PodcastController(PodcastServices podcastServices, IDatabaseService databaseService, IEpisodeJobQueue episodeJobQueue, ILogger<PodcastController> logger)
+    public PodcastController(PodcastServices podcastServices, IDatabaseService databaseService, IEpisodeJobQueue episodeJobQueue, ConfigManager configManager, ILogger<PodcastController> logger)
     {
         _podcastServices = podcastServices ?? throw new ArgumentNullException(nameof(podcastServices));
         _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
         _episodeJobQueue = episodeJobQueue ?? throw new ArgumentNullException(nameof(episodeJobQueue));
+        _configManager = configManager ?? throw new ArgumentNullException(nameof(configManager));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
     [HttpPost("add")]
@@ -183,7 +185,7 @@ public class PodcastController : Controller
                 return false;
             }
 
-            var filepath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts", podcastId.ToString(), $"{episodeGuid}.mp3");
+            var filepath = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString(), $"{episodeGuid}.mp3");
             if (System.IO.File.Exists(filepath))
             {
                 System.IO.File.Delete(filepath);

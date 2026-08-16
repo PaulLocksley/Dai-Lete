@@ -38,11 +38,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.WebHost.UseSentry();
 
-// Add Prometheus metrics server on port 4011
-builder.Services.AddMetricServer(options =>
+var workerEnabled = builder.Configuration.GetValue("Worker:Enabled", true);
+
+// Add Prometheus metrics server on port 4011 for the web frontend only.
+if (!workerEnabled)
 {
-    options.Port = 4011;
-});
+    builder.Services.AddMetricServer(options =>
+    {
+        options.Port = 4011;
+    });
+}
 
 // Register services
 builder.Services.AddSingleton<IDatabaseService, DatabaseService>();
@@ -54,10 +59,10 @@ builder.Services.AddSingleton<RedirectService>();
 builder.Services.AddSingleton<XmlService>();
 builder.Services.AddSingleton<FeedCacheService>();
 builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(builder.Configuration["Valkey:ConnectionString"] ?? "localhost:6379"));
+    ConnectionMultiplexer.Connect(NormalizeValkeyConnectionString(builder.Configuration["Valkey:ConnectionString"] ?? "localhost:6379")));
 builder.Services.AddSingleton<IEpisodeJobQueue, ValkeyEpisodeJobQueue>();
 
-if (builder.Configuration.GetValue("Worker:Enabled", true))
+if (workerEnabled)
 {
     builder.Services.AddHostedService<ConvertNewEpisodes>();
 }
@@ -99,17 +104,16 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseStaticFiles();
-//add endpoint for podcast mp3s.
-var podcastFolder = $"{AppDomain.CurrentDomain.BaseDirectory}Podcasts{Path.DirectorySeparatorChar}";
+var configManager = app.Services.GetRequiredService<ConfigManager>();
+var podcastFolder = configManager.GetPodcastStoragePath();
 if (!Directory.Exists(podcastFolder))
 {
-    DirectoryInfo di = Directory.CreateDirectory(podcastFolder);
+    Directory.CreateDirectory(podcastFolder);
 }
 
 app.UseStaticFiles(new StaticFileOptions
 {
-    FileProvider = new PhysicalFileProvider(
-        Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Podcasts")),
+    FileProvider = new PhysicalFileProvider(podcastFolder),
     RequestPath = "/Podcasts"
 });
 app.UseRouting();
@@ -130,3 +134,29 @@ var feedCacheService = app.Services.GetRequiredService<FeedCacheService>();
 FeedCache.Initialize(feedCacheService);
 
 app.Run();
+
+static string NormalizeValkeyConnectionString(string connectionString)
+{
+    if (!Uri.TryCreate(connectionString, UriKind.Absolute, out var uri) ||
+        (uri.Scheme != "valkey" && uri.Scheme != "redis" && uri.Scheme != "rediss"))
+    {
+        return connectionString;
+    }
+
+    var normalized = $"{uri.Host}:{uri.Port}";
+    if (!string.IsNullOrEmpty(uri.UserInfo))
+    {
+        var password = uri.UserInfo.Split(':', 2).LastOrDefault();
+        if (!string.IsNullOrEmpty(password))
+        {
+            normalized += $",password={Uri.UnescapeDataString(password)}";
+        }
+    }
+
+    if (uri.Scheme == "rediss")
+    {
+        normalized += ",ssl=true";
+    }
+
+    return normalized;
+}

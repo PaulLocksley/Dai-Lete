@@ -7,4 +7,5 @@ public interface IEpisodeJobQueue
     Task<string> EnqueueAsync(EpisodeJob job);
     Task<IReadOnlyList<QueuedEpisodeJob>> ReadAsync(CancellationToken cancellationToken);
     Task AckAsync(string jobId);
+    Task CompleteAsync(QueuedEpisodeJob queuedJob);
 }

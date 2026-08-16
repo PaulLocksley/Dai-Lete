@@ -131,7 +131,7 @@ public class FeedCacheService
                 }
             }
 
-            _logger.LogInformation("Feed cache build COMPLETED FINE with {ProcessedCount}/{TotalCount} podcasts processed", 
+            _logger.LogInformation("Feed cache build COMPLETED FINE with {ProcessedCount}/{TotalCount} podcasts processed",
                 processedCount, podcasts.Count);
         }
         catch (Exception ex)

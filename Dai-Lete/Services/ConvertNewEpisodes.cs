@@ -71,12 +71,12 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
                 if (existingEpisodes.Any())
                 {
                     _logger.LogInformation("Episode {EpisodeGuid} already exists, skipping", episodeInfo.EpisodeGuid);
-                    await _episodeJobQueue.AckAsync(queuedJob.Id);
+                    await _episodeJobQueue.CompleteAsync(queuedJob);
                     continue;
                 }
 
                 await ProcessEpisodeAsync(new Podcast(episodeInfo.PodcastId.ToString(), episodeInfo.PodcastInUri), episodeInfo.EpisodeUrl, episodeInfo.EpisodeGuid);
-                await _episodeJobQueue.AckAsync(queuedJob.Id);
+                await _episodeJobQueue.CompleteAsync(queuedJob);
                 processedEpisodes++;
             }
 

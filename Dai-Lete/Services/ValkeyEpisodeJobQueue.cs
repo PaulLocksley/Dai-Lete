@@ -11,6 +11,7 @@ public class ValkeyEpisodeJobQueue : IEpisodeJobQueue
     private readonly ILogger<ValkeyEpisodeJobQueue> _logger;
     private bool _groupInitialized;
     private readonly SemaphoreSlim _groupSemaphore = new(1, 1);
+    private TimeSpan JobDeduplicationExpiration => TimeSpan.FromDays(7);
 
     public ValkeyEpisodeJobQueue(IConnectionMultiplexer redis, IOptions<ValkeyOptions> options, ILogger<ValkeyEpisodeJobQueue> logger)
     {
@@ -23,15 +24,30 @@ public class ValkeyEpisodeJobQueue : IEpisodeJobQueue
     {
         if (job is null) throw new ArgumentNullException(nameof(job));
 
-        var id = await _database.StreamAddAsync(_options.JobStream, new NameValueEntry[]
+        var dedupeKey = JobDedupeKey(job.PodcastId, job.EpisodeGuid);
+        if (!await _database.StringSetAsync(dedupeKey, "1", JobDeduplicationExpiration, When.NotExists))
         {
-            new("podcastId", job.PodcastId.ToString()),
-            new("podcastInUri", job.PodcastInUri),
-            new("episodeUrl", job.EpisodeUrl),
-            new("episodeGuid", job.EpisodeGuid)
-        });
+            _logger.LogInformation("Episode job already queued for podcast {PodcastId}, episode {EpisodeGuid}", job.PodcastId, job.EpisodeGuid);
+            return string.Empty;
+        }
 
-        return id.ToString();
+        try
+        {
+            var id = await _database.StreamAddAsync(_options.JobStream, new NameValueEntry[]
+            {
+                new("podcastId", job.PodcastId.ToString()),
+                new("podcastInUri", job.PodcastInUri),
+                new("episodeUrl", job.EpisodeUrl),
+                new("episodeGuid", job.EpisodeGuid)
+            });
+
+            return id.ToString();
+        }
+        catch
+        {
+            await _database.KeyDeleteAsync(dedupeKey);
+            throw;
+        }
     }
 
     public async Task<IReadOnlyList<QueuedEpisodeJob>> ReadAsync(CancellationToken cancellationToken)
@@ -91,6 +107,16 @@ public class ValkeyEpisodeJobQueue : IEpisodeJobQueue
         if (string.IsNullOrWhiteSpace(jobId)) throw new ArgumentException("Job ID is required", nameof(jobId));
         await _database.StreamAcknowledgeAsync(_options.JobStream, _options.ConsumerGroup, jobId);
     }
+
+    public async Task CompleteAsync(QueuedEpisodeJob queuedJob)
+    {
+        if (queuedJob is null) throw new ArgumentNullException(nameof(queuedJob));
+
+        await AckAsync(queuedJob.Id);
+        await _database.KeyDeleteAsync(JobDedupeKey(queuedJob.Job.PodcastId, queuedJob.Job.EpisodeGuid));
+    }
+
+    private string JobDedupeKey(Guid podcastId, string episodeGuid) => $"{_options.JobStream}:dedupe:{podcastId}:{episodeGuid}";
 
     private async Task EnsureConsumerGroupAsync()
     {

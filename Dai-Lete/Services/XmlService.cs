@@ -167,7 +167,7 @@ public class XmlService
                 _ = _podcastService.UpdatePodcastUrl(podcastId, redirectNode.InnerText);
                 channelNode.RemoveChild(redirectNode);
             }
-            _ = FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
+            await FeedCache.updateMetaData(podcastId, new PodcastMetadata(metaDataName, metaDataAuthor,
                                                                     metaDataImageUrl, metaDataDescription,
                                                                     processedEpisodes, nonProcessedEpisodes));
 

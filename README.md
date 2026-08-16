@@ -62,4 +62,4 @@ Valkey__ConsumerName=dai-lete-worker-0
 
 For multiple frontend nodes, mount the same podcast storage path on every frontend and worker node. Frontends serve the processed MP3 files from this shared path, while the worker writes processed episodes there.
 
-Run only one worker `Worker__Enabled=false` so they only serve the web UI/API and enqueue jobs.
+Set `Worker__Enabled=false` on frontend-only nodes so they only serve the web UI/API and enqueue jobs. Run at least one worker node with `Worker__Enabled=true` to process queued episodes.

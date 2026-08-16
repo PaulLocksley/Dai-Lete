@@ -153,6 +153,11 @@ public class PodcastController : Controller
                 EpisodeGuid = episodeGuid
             });
 
+            if (string.IsNullOrEmpty(jobId))
+            {
+                return Ok("Episode already queued");
+            }
+
             _logger.LogInformation("Episode {EpisodeGuid} added to Valkey queue as job {JobId}", episodeGuid, jobId);
             return Ok($"Episode added to queue. Job ID: {jobId}");
         }

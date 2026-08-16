@@ -8,3 +8,6 @@ Dai-Lete/Podcasts.sqlite
 /Dai-Lete/Podcasts/
 Dai-Lete.Tests/TestData/real.local.mp3
 Dai-Lete.Tests/TestData/real.remote.mp3
+/Podcasts
+Podcasts/
+*.sqlite

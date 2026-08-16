@@ -29,3 +29,4 @@ Set up a systemd service with the following env variables
 - podcastStoragePath - (optional) directory where processed podcast files are stored (defaults to ./Podcasts)
 - AUTH_USERNAME - username for web interface login (defaults to "admin")
 - AUTH_PASSWORD - password for web interface login (defaults to "password")
+

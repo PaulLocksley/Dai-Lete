@@ -148,11 +148,19 @@ public class ConvertNewEpisodes : IHostedService, IDisposable
         try
         {
             await _podcastServices.DownloadEpisodeAsync(podcast, downloadLink, episodeGuid);
-            var fileSize = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
+            var result = await _podcastServices.ProcessDownloadedEpisodeAsync(podcast.Id, episodeGuid);
 
             using var connection = await _databaseService.GetConnectionAsync();
-            const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize) VALUES (@id, @pid, @fs)";
-            await connection.ExecuteAsync(sql, new { id = episodeGuid, pid = podcast.Id, fs = fileSize });
+            const string sql = @"INSERT INTO Episodes (Id, PodcastId, FileSize, InitialLengthSeconds, ProcessedLengthSeconds)
+                                 VALUES (@id, @pid, @fs, @initialLength, @processedLength)";
+            await connection.ExecuteAsync(sql, new
+            {
+                id = episodeGuid,
+                pid = podcast.Id,
+                fs = result.FileSize,
+                initialLength = result.InitialLengthSeconds,
+                processedLength = result.ProcessedLengthSeconds
+            });
 
             await FeedCache.UpdatePodcastCache(podcast.Id);
 

@@ -1,5 +1,4 @@
 using Microsoft.Data.Sqlite;
-using Dapper;
 
 namespace Dai_Lete.Services;
 
@@ -57,7 +56,7 @@ public class DatabaseService : IDatabaseService
             using var connection = new SqliteConnection(GetConnectionString());
             await connection.OpenAsync();
 
-            await CreateTablesAsync(connection);
+            await DatabaseMigrations.ApplyAsync(connection, _logger);
 
             _isInitialized = true;
             _logger.LogInformation("Database initialized successfully at: {DatabasePath}", dbPath);
@@ -71,35 +70,6 @@ public class DatabaseService : IDatabaseService
         {
             _initSemaphore.Release();
         }
-    }
-
-    private async Task CreateTablesAsync(SqliteConnection connection)
-    {
-        var createPodcastsTable = @"
-            CREATE TABLE IF NOT EXISTS Podcasts (
-                Id GUID PRIMARY KEY,
-                InUri TEXT NOT NULL
-            )";
-
-        var createEpisodesTable = @"
-            CREATE TABLE IF NOT EXISTS Episodes (
-                Id GUID PRIMARY KEY,
-                PodcastId GUID NOT NULL,
-                FileSize INTEGER,
-                FOREIGN KEY (PodcastId) REFERENCES Podcasts(Id)
-            )";
-
-        var createRedirectsTable = @"
-            CREATE TABLE IF NOT EXISTS Redirects (
-                Id GUID PRIMARY KEY,
-                OriginalLink TEXT NOT NULL
-            )";
-
-        await connection.ExecuteAsync(createPodcastsTable);
-        await connection.ExecuteAsync(createEpisodesTable);
-        await connection.ExecuteAsync(createRedirectsTable);
-
-        _logger.LogDebug("Database tables created/verified");
     }
 
     private string GetDatabasePath()

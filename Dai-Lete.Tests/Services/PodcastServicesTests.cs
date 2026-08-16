@@ -81,7 +81,7 @@ public class PodcastServicesTests
 
         var result = await service.ProcessDownloadedEpisodeAsync(podcastId, episodeId);
 
-        Assert.Equal(-1, result);
+        Assert.Equal(-1, result.FileSize);
     }
 
     [Fact]
@@ -121,7 +121,9 @@ public class PodcastServicesTests
 
         var result = await service.ProcessDownloadedEpisodeAsync(podcastId, episodeId);
 
-        Assert.True(result > 0, "Processing should succeed and return file size");
+        Assert.True(result.FileSize > 0, "Processing should succeed and return file size");
+        Assert.True(result.InitialLengthSeconds > 0, "Processing should return the initial episode length");
+        Assert.True(result.ProcessedLengthSeconds > 0, "Processing should return the processed episode length");
 
         var finalFile = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString(), $"{episodeId}.mp3");
         Assert.True(File.Exists(finalFile), "Final processed file should exist");
@@ -178,7 +180,9 @@ public class PodcastServicesTests
 
         var result = await service.ProcessDownloadedEpisodeAsync(podcastId, episodeId);
 
-        Assert.True(result > 0, "Processing should succeed and return file size");
+        Assert.True(result.FileSize > 0, "Processing should succeed and return file size");
+        Assert.True(result.InitialLengthSeconds > 0, "Processing should return the initial episode length");
+        Assert.True(result.ProcessedLengthSeconds > 0, "Processing should return the processed episode length");
 
         var finalFile = Path.Combine(_configManager.GetPodcastStoragePath(), podcastId.ToString(), $"{episodeId}.mp3");
         Assert.True(File.Exists(finalFile), "Final processed file should exist");

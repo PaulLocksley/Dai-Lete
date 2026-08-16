@@ -9,6 +9,8 @@ public class PodcastEpisodeMetadata
     public Uri? downloadLink;
     public string episodeId;
     public Podcast Podcast;
+    public double? initialLengthSeconds;
+    public double? processedLengthSeconds;
 
     public PodcastEpisodeMetadata()
     {
@@ -19,6 +21,8 @@ public class PodcastEpisodeMetadata
         this.downloadLink = null;
         this.episodeId = string.Empty;
         this.Podcast = new Podcast();
+        this.initialLengthSeconds = null;
+        this.processedLengthSeconds = null;
     }
 
     public PodcastEpisodeMetadata(string episodeName, string description, DateTime? pubDate, Uri? imageLink
@@ -30,6 +34,8 @@ public class PodcastEpisodeMetadata
         this.imageLink = imageLink;
         this.episodeId = episodeId;
         this.Podcast = podcast;
+        this.initialLengthSeconds = null;
+        this.processedLengthSeconds = null;
     }
 
     public PodcastEpisodeMetadata(Podcast podcast)
@@ -40,5 +46,7 @@ public class PodcastEpisodeMetadata
         this.imageLink = null;
         this.episodeId = string.Empty;
         this.Podcast = podcast;
+        this.initialLengthSeconds = null;
+        this.processedLengthSeconds = null;
     }
 }

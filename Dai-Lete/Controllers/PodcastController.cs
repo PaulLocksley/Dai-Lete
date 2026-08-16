@@ -138,7 +138,7 @@ public class PodcastController : Controller
         {
             using var connection = await _databaseService.GetConnectionAsync();
             const string podcastSql = "SELECT Id FROM Podcasts WHERE Id = @id";
-            var knownPodcast = await connection.QueryFirstOrDefaultAsync<Guid?>(podcastSql, new { id = parsedPodcastGuid });
+            var knownPodcast = await connection.QueryFirstOrDefaultAsync<string?>(podcastSql, new { id = parsedPodcastGuid });
             if (knownPodcast is null)
             {
                 _logger.LogWarning("Podcast not found: {PodcastId}", parsedPodcastGuid);

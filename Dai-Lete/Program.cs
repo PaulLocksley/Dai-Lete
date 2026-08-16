@@ -2,6 +2,7 @@ using Dai_Lete.Models;
 using Dai_Lete.Repositories;
 using Dai_Lete.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc.ApplicationParts;
 using Microsoft.AspNetCore.Mvc.Formatters;
 using Microsoft.Extensions.FileProviders;
@@ -9,6 +10,8 @@ using Prometheus;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
+var valkeyConnectionString = NormalizeValkeyConnectionString(builder.Configuration["Valkey:ConnectionString"] ?? "localhost:6379");
+var valkeyConnection = ConnectionMultiplexer.Connect(valkeyConnectionString);
 
 // Add configuration options
 builder.Services.Configure<PodcastOptions>(builder.Configuration.GetSection(PodcastOptions.SectionName));
@@ -30,6 +33,10 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.Cookie.SameSite = SameSiteMode.Strict;
         options.Cookie.Name = "DaiLete.Auth";
     });
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("Dai-Lete")
+    .PersistKeysToStackExchangeRedis(valkeyConnection, "Dai-Lete:DataProtection-Keys");
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -58,8 +65,7 @@ builder.Services.AddSingleton<PodcastServices>();
 builder.Services.AddSingleton<RedirectService>();
 builder.Services.AddSingleton<XmlService>();
 builder.Services.AddSingleton<FeedCacheService>();
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
-    ConnectionMultiplexer.Connect(NormalizeValkeyConnectionString(builder.Configuration["Valkey:ConnectionString"] ?? "localhost:6379")));
+builder.Services.AddSingleton<IConnectionMultiplexer>(valkeyConnection);
 builder.Services.AddSingleton<IEpisodeJobQueue, ValkeyEpisodeJobQueue>();
 
 if (workerEnabled)
@@ -102,7 +108,10 @@ if (app.Environment.IsDevelopment())
 }
 
 
-app.UseHttpsRedirection();
+if (app.Configuration.GetValue("HttpsRedirection:Enabled", false))
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 var configManager = app.Services.GetRequiredService<ConfigManager>();
 var podcastFolder = configManager.GetPodcastStoragePath();
